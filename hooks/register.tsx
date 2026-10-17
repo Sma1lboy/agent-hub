@@ -237,6 +237,11 @@ export function actions($: EngineInterface): Actions {
       await $.store.set(ackKey(row.id), await $.clock.now())
       await poll($)
     },
+    ackAll: async rows => {
+      const now = await $.clock.now()
+      for (const row of rows) await $.store.set(ackKey(row.id), now)
+      await poll($)
+    },
     mute: async row => {
       const now = await $.clock.now()
       await $.store.set(ackKey(row.id), now)

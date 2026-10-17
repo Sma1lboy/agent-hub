@@ -21,6 +21,7 @@ export type Actions = {
   answer: (task: OpenTask, text: string) => Promise<void>
   choose: (task: OpenTask, option: string) => Promise<void>
   ack: (row: FeedRow) => Promise<void>
+  ackAll: (rows: readonly FeedRow[]) => Promise<void>
   mute: (row: FeedRow) => Promise<void>
   jump: (hostId: string) => Promise<void>
   setSettings: (patch: Partial<HubSettings>) => Promise<void>
@@ -185,7 +186,12 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
       </Box>
       {settings.divider ? divider($, e, settings.taskRows) : null}
       <Box flexDirection="column" rowGap="sm">
-        {header(tx('updates'), feed.length, false)}
+        <Box key="summary-header" flexDirection="row" justifyContent="space-between" alignItems="center">
+          {header(tx('updates'), feed.length, false)}
+          {feed.length > 1 ? (
+            <Button key="ack-all" plain dimColor hover={{ dimColor: false }} label={tx('okAll')} onPress={() => act.ackAll(feed)} />
+          ) : null}
+        </Box>
         {paused.map(card => (
           <Text key={`paused-${card.sid}`} color="warning">
             {card.name}: {tx('paused', { reason: card.paused ?? '' })}

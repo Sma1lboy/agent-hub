@@ -330,6 +330,16 @@ test('OK hides a message everywhere; No more like this, once turned on in settin
   expect(calls.prompts[0]).toContain('- Bumped lodash')
 })
 
+test('Mark all read hides every message at once', async ($, on) => {
+  const feed = [1, 2, 3].map(i => ({ id: `other:f${i}`, kind: 'milestone' as const, text: `Outcome ${i}`, at: NOW - i * 1000 }))
+  const { store } = stub(on, { entries: { [cardKey('other')]: otherCard({ feed, tasks: [] }) } })
+  await start($)
+  const ui = await $.ui.mount(pane('desktop'))
+  await ui.press({ key: 'ack-all' })
+  expect(['other:f1', 'other:f2', 'other:f3'].every(id => store.get(`ack:${id}`) === NOW)).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /Outcome/ })).toBeUndefined()
+})
+
 test('settings: language, auto-open and divider sync through the store', async ($, on) => {
   const { calls, clock, store } = stub(on, { entries: { [cardKey('other')]: otherCard({ tasks: [] }) } })
   await start($)
