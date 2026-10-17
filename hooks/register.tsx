@@ -45,6 +45,7 @@ import {
 const snapAtom = atom({ plugin: 'agent-hub', key: 'snap' } as const, null)
 const settingsAtom = atom({ plugin: 'agent-hub', key: 'settings' } as const, DEFAULT_SETTINGS)
 const errorsAtom = atom({ plugin: 'agent-hub', key: 'errors' } as const, {})
+const bandAtom = atom({ plugin: 'agent-hub', key: 'bandOpen' } as const, false)
 
 const TOOL = {
   assign: 'mcp__agent-hub__assign_task',
@@ -165,7 +166,7 @@ async function poll($: EngineInterface) {
   const ids = open.map(task => `${task.sid}:${task.id}`)
   const arrived = rt.seenTasks !== undefined && ids.some(id => !rt.seenTasks!.has(id))
   rt.seenTasks = new Set(ids)
-  if (arrived && settings.autoOpen) void $.ui.open({ id: HUB_PANE, title: t(settings.lang, 'title') }).catch(() => undefined)
+  if (arrived && settings.autoOpen) void showHub($, settings.lang, false).catch(() => undefined)
 
   const card = snap.cards.find(c => c.sid === rt.sid)
   if (rt.summaryDue && !rt.summarizing && card && now - (card.summaryAt ?? 0) >= SUMMARY_GAP_MS) {
@@ -265,6 +266,24 @@ async function sendReply($: EngineInterface, task: OpenTask, answer: string) {
   await poll($)
 }
 
+/**
+ * In a plain terminal the hub is a band above the prompt: it draws on the terminal's own
+ * background, where a docked pane gets the engine's grey. Elsewhere it is a pane.
+ * `toggle` (the /hub command) closes an open band; an arriving task only opens it.
+ * Returns whether the hub is showing afterwards.
+ */
+async function showHub($: EngineInterface, lang: HubSettings['lang'], toggle: boolean) {
+  const surfaces = await $.session.surfaces()
+  const terminalOnly = surfaces.length > 0 && surfaces.every(s => s === 'terminal')
+  if (!terminalOnly) {
+    await $.ui.open({ id: HUB_PANE, title: t(lang, 'title'), focus: toggle ? true : undefined })
+    return true
+  }
+  const open = toggle ? !(await read($, bandAtom)) : true
+  await update($, bandAtom, () => open)
+  return open
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await join($)
@@ -280,8 +299,8 @@ export const register: Register = on => {
   on('command.run', { command: 'hub' }, async ($, e) => {
     await join($)
     const { lang } = await read($, settingsAtom)
-    await $.ui.open({ id: HUB_PANE, title: t(lang, 'title'), focus: true })
-    return { text: t(lang, 'opened') }
+    const shown = await showHub($, lang, true)
+    return { text: t(lang, shown ? 'opened' : 'closed') }
   })
 
   on('command.run', { command: 'hub-settings' }, async ($, e) => {
@@ -362,6 +381,12 @@ export const register: Register = on => {
     }
     return result
   }).catch(($, e, next) => next(e))
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    void join($).catch(() => undefined)
+    if (e.surface !== 'terminal' || e.props.hasSurvey || !(await read($, bandAtom))) return next(e)
+    return renderHub($, e, actions($))
+  })
 
   on('ui.render', { component: 'Pane', requestId: HUB_PANE }, async ($, e) => {
     void join($).catch(() => undefined)

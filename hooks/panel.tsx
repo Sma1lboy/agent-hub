@@ -27,7 +27,7 @@ export type Actions = {
   setSettings: (patch: Partial<HubSettings>) => Promise<void>
 }
 
-type PaneInput = RenderInput<'Pane'>
+type PaneInput = RenderInput<'Pane'> | RenderInput<'AbovePrompt'>
 
 const LANGS = [
   ['en', 'English'],

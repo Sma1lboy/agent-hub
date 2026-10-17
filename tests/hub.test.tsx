@@ -23,6 +23,7 @@ type Calls = {
 }
 
 type Opts = {
+  surfaces?: ('terminal' | 'desktop')[]
   entries?: Record<string, unknown>
   host?: string
   model?: (model: string, prompt: string) => { isAnswered: true; text: string } | { isAnswered: false; reason: 'api-error'; status: number; error: string }
@@ -48,6 +49,7 @@ function stub(on: On, opts: Opts = {}) {
   const session = mock.session(on)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('session.surfaces', () => ({ value: opts.surfaces ?? ['desktop'] }))
   on('session.id', () => ({ value: 'self' }))
   on('session.cwd', () => ({ value: '/work/alpha' }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
@@ -338,6 +340,29 @@ test('Mark all read hides every message at once', async ($, on) => {
   await ui.press({ key: 'ack-all' })
   expect(['other:f1', 'other:f2', 'other:f3'].every(id => store.get(`ack:${id}`) === NOW)).toBe(true)
   expect(await ui.find({ type: 'Text', text: /Outcome/ })).toBeUndefined()
+})
+
+test('in a plain terminal /hub toggles a band above the prompt instead of a pane', async ($, on) => {
+  const { calls } = stub(on, { surfaces: ['terminal'], entries: { [cardKey('other')]: otherCard() } })
+  // What the engine draws in the band when the hub leaves it alone.
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine band'] }))
+  await start($)
+  const band = { plugin: 'agent-hub', surface: 'terminal', component: 'AbovePrompt', viewport: { columns: 100, rows: 40 }, props: { hasSurvey: false, isWorking: false, maxRows: 30, bodyColumns: 96, scroll: { offset: 0, bodyRows: 30 } } } as MountTarget<'terminal', 'AbovePrompt'>
+  const run = () => $.command.run({ command: 'hub', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } } as never)
+
+  const closedBefore = await $.ui.mount(band)
+  expect(await closedBefore.find({ type: 'Text', text: 'Which region should prod use?' })).toBeUndefined()
+  await closedBefore.unmount()
+
+  expect(String((await run()).text)).toContain('opened')
+  const open = await $.ui.mount(band)
+  expect(await open.find({ type: 'Text', text: 'Which region should prod use?' })).toBeDefined()
+  await open.unmount()
+  expect(calls.opened).toEqual([])
+
+  expect(String((await run()).text)).toContain('closed')
+  const closed = await $.ui.mount(band)
+  expect(await closed.find({ type: 'Text', text: 'Which region should prod use?' })).toBeUndefined()
 })
 
 test('settings: language, auto-open and divider sync through the store', async ($, on) => {

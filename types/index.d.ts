@@ -63,6 +63,7 @@ declare module 'claude-code' {
       settings: HubSettings
       errors: Record<string, string>
       showAllTasks: boolean
+      bandOpen: boolean
     }
   }
 }

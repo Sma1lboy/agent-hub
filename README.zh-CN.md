@@ -50,7 +50,7 @@ claude plugin install agent-hub --marketplace Sma1lboy/agent-hub
 
 ## 用法
 
-- `/hub` 打开面板。
+- `/hub` 打开面板。纯终端里它是输入框上方的一块区域，直接用终端自己的背景(透明)，再输一次 `/hub` 收起；桌面 app 里是右侧面板。
 - `/hub-settings` 打开设置：语言（中文 / English，默认中文）、来任务时自动打开面板（默认开）、待办和进展之间的可拖动分隔线（默认关）、消息上的「不再显示这类」按钮（默认关）。设置对本机所有 session 生效。
 - 状态栏显示 `N 个任务等你 · /hub`，是所有 session 加起来的待办数。
 
