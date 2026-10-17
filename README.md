@@ -1,5 +1,7 @@
 # Agent Hub
 
+[中文说明](README.zh-CN.md)
+
 A Claude Code mod that puts every session on your machine into one panel. The top half, To do, lists what each agent is waiting on you for. The bottom half, Summary, is a stream of what the agents got done: one card per message, newest first, each naming the project it came from.
 
 ```
@@ -45,17 +47,23 @@ Summary 3
 
 Needs Claude Code 2.1.299 or newer.
 
-From a local clone (edits are picked up by `/reload-plugins`, no reinstall):
+At the prompt of a terminal session:
 
-```bash
-claude plugin marketplace add ~/.claude/mods/agent-hub
+```
+/plugin install agent-hub --marketplace Sma1lboy/agent-hub
 ```
 
+Answer `y` to add the marketplace, then pick a scope (user scope loads it in every session).
+
+From a shell:
+
 ```bash
-claude plugin install agent-hub@agent-hub
+claude plugin install agent-hub --marketplace Sma1lboy/agent-hub
 ```
 
-In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace, then Add plugin.
+In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `Sma1lboy/agent-hub`, then Add plugin.
+
+Working on the mod itself? Add your clone as a local marketplace instead (`claude plugin marketplace add <folder>`, then `claude plugin install agent-hub@agent-hub`); edits are then picked up by `/reload-plugins` with no reinstall.
 
 ## Use
 
