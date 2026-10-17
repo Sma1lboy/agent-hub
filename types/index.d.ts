@@ -31,23 +31,11 @@ export type Card = {
   /** The last summary, the baseline the next one is diffed against. */
   summary?: Summary
   summaryAt?: number
-  /** A turn is running right now. */
-  busy?: boolean
   /** Why updates stopped, shown on the panel instead of failing quietly. */
   paused?: string
 }
 
-export type SessionState = 'in_progress' | 'blocked' | 'done'
-
-export type Summary = {
-  milestones: string[]
-  authorized: string[]
-  /** What the session is working towards, one line. */
-  goal?: string
-  /** Where it stands right now, one line. */
-  now?: string
-  state?: SessionState
-}
+export type Summary = { milestones: string[]; authorized: string[] }
 
 /** `reply:<session>:<task>`: written by whichever session answered. */
 export type Reply = { answer: string; at: number; by: string }

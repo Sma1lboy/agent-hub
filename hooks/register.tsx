@@ -89,7 +89,6 @@ async function doJoin($: EngineInterface) {
     cwd,
     name: cwd.split('/').filter(Boolean).at(-1) ?? cwd,
     heartbeat: now,
-    busy: false,
     tasks: old?.tasks ?? [],
     feed: old?.feed ?? [],
     summary: old?.summary,
@@ -338,19 +337,11 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // Working / Idle on the summary card.
-  on('prompt.submit', async ($, e, next) => {
-    const result = await next(e)
-    if (rt.sid && e.command === undefined && !('drop' in result && result.drop !== undefined)) void mutateCard($, c => ({ ...c, busy: true })).catch(() => undefined)
-    return result
-  }).catch(($, e, next) => next(e))
-
   on('turn.complete', async ($, e, next) => {
     void join($).catch(() => undefined)
     if (e.agentId === undefined) {
       if (rt.toolsThisTurn > 0) rt.summaryDue = true
       rt.toolsThisTurn = 0
-      if (rt.sid) void mutateCard($, c => ({ ...c, busy: false })).catch(() => undefined)
     }
     return next(e)
   })

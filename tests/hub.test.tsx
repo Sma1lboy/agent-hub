@@ -232,7 +232,7 @@ test('a turn with tools brings a summary; only new milestones become messages', 
     model: () => {
       round += 1
       return round === 1
-        ? { isAnswered: true, text: '{"goal":"Ship the login page","now":"Login merged; nothing pending","state":"done","milestones":["Login page works end to end"],"authorized":["Merged MR !42 (memory: may merge)"]}' }
+        ? { isAnswered: true, text: '{"milestones":["Login page works end to end"],"authorized":["Merged MR !42 (memory: may merge)"]}' }
         : { isAnswered: true, text: '{"milestones":["Login page works end to end","Tests green on CI"],"authorized":["Merged MR !42 (memory: may merge)"]}' }
     },
   })
@@ -244,12 +244,11 @@ test('a turn with tools brings a summary; only new milestones become messages', 
   expect(calls.models).toEqual(['haiku'])
 
   const ui = await $.ui.mount(pane('terminal'))
-  // One card for the session: its goal, state chip, messages and where it stands.
-  expect(await ui.find({ type: 'Text', text: 'Ship the login page' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /● Done/ })).toBeDefined()
+  // One message per card, newest first, each naming its project.
   expect(await ui.find({ type: 'Text', text: 'Login page works end to end' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Merged MR !42/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'Login merged; nothing pending' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Summary 2/ })).toBeDefined()
+  expect(await ui.findAll({ type: 'Text', text: /^alpha$/ })).toHaveLength(2)
 
   // Another turn within five minutes waits; after that, only the new line is added.
   await $.tool.call({ tool: 'Read', tool_use_id: 'r2', file_path: '/work/alpha/b.ts' } as never).catch(() => undefined)

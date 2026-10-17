@@ -1,9 +1,9 @@
 import { atom, read } from 'claude-code'
-import type { Color, EngineInterface, RenderElement, RenderInput } from 'claude-code'
+import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
-import type { FeedItem, HubSettings } from '../types'
-import { DEFAULT_SETTINGS, ago, openTasks, sessionViews, t } from './hub'
-import type { Chip, CopyKey, FeedRow, OpenTask, SessionView } from './hub'
+import type { HubSettings } from '../types'
+import { DEFAULT_SETTINGS, ago, feedRows, openTasks, pausedCards, t } from './hub'
+import type { CopyKey, FeedRow, OpenTask } from './hub'
 
 const snapAtom = atom({ plugin: 'agent-hub', key: 'snap' } as const, null)
 const settingsAtom = atom({ plugin: 'agent-hub', key: 'settings' } as const, DEFAULT_SETTINGS)
@@ -25,9 +25,6 @@ export type Actions = {
 type PaneInput = RenderInput<'Pane'>
 
 const KIND_KEY: Record<OpenTask['kind'], CopyKey> = { do: 'kindDo', answer: 'kindAnswer', choose: 'kindChoose' }
-
-const CHIP_KEY: Record<Chip, CopyKey> = { working: 'chipWorking', idle: 'chipIdle', done: 'chipDone', blocked: 'chipBlocked', offline: 'chipOffline' }
-const CHIP_COLOR: Record<Chip, Color> = { working: 'claude', idle: 'subtle', done: 'success', blocked: 'warning', offline: 'inactive' }
 
 /** Cuts text to about `lines` lines of `columns`, so one long detail cannot stretch a card. */
 const clip = (text: string, columns: number, lines: number) => {
@@ -54,11 +51,10 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   // Inside a card: the pane's width less the border and padding.
   const inner = Math.max(20, (e.props.bodyColumns || e.viewport?.columns || 60) - 4)
   const wide = inner >= 56
-  // Per-message actions show on hover where the surface reports the pointer, inline elsewhere.
-  const hovers = e.surface === 'desktop' || e.viewport?.isFullscreen === true
 
   const tasks = snap ? openTasks(snap, now) : []
-  const sessions = snap ? sessionViews(snap, now) : []
+  const feed = snap ? feedRows(snap) : []
+  const paused = snap ? pausedCards(snap, now) : []
   const selfHost = snap?.cards.find(c => c.sid === snap.self)?.hostId
   const canJump = (hostId?: string): hostId is string => !!hostId && hostId !== selfHost
 
@@ -109,63 +105,28 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     )
   }
 
-  const itemActions = (row: FeedRow) => [
-    <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />,
-    <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />,
-  ]
-
-  const itemRow = (view: SessionView, item: FeedItem) => {
-    const row: FeedRow = { ...item, sid: view.card.sid, name: view.card.name, hostId: view.card.hostId }
-    const mark = item.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>
-    return hovers ? (
-      <Box key={`item-${item.id}`} flexDirection="row">
-        {mark}
+  // One card per message, newest first, each naming the project it came from.
+  const feedCard = (row: FeedRow) => (
+    <Box key={`feed-${row.id}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
+      <Box flexDirection="row">
+        {row.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>}
         <Box flexShrink={1}>
-          <Text>{item.text}</Text>
-        </Box>
-        <Box display="none" hover={{ display: 'flex' }} position="absolute" right={0} top={0} gap="md" paddingX="sm" backgroundColor="inverseText">
-          {itemActions(row)}
+          <Text>{row.text}</Text>
         </Box>
       </Box>
-    ) : (
-      <Box key={`item-${item.id}`} flexDirection="column">
-        <Box flexDirection="row">
-          {mark}
-          <Box flexShrink={1}>
-            <Text>{item.text}</Text>
-          </Box>
-        </Box>
-        <Box flexDirection="row" gap={2} marginLeft={2}>
-          {itemActions(row)}
+      <Box flexDirection="row" justifyContent="space-between" flexWrap="wrap" columnGap="md">
+        <Text>
+          <Text weight="semibold">{row.name}</Text>
+          <Text dimColor> · {ago(lang, row.at, now, true)}</Text>
+        </Text>
+        <Box flexDirection="row" gap="md">
+          <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
+          <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />
+          {openButton(`fjump-${row.id}`, row.hostId)}
         </Box>
       </Box>
-    )
-  }
-
-  const sessionCard = (view: SessionView) => {
-    const { card } = view
-    const summary = card.summary
-    return (
-      <Box key={`sess-${card.sid}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
-        <Box flexDirection="row" justifyContent="space-between" gap={1}>
-          <Text weight="bold">{card.name}</Text>
-          <Box flexDirection="row" gap={2}>
-            <Text color={CHIP_COLOR[view.chip]}>● {tx(CHIP_KEY[view.chip])}</Text>
-            {openButton(`sjump-${card.sid}`, card.hostId)}
-          </Box>
-        </Box>
-        {summary?.goal ? <Text weight="semibold">{clip(summary.goal, inner, 2)}</Text> : null}
-        {view.items.length ? (
-          <Box flexDirection="column" rowGap="xs" paddingY="xs">
-            {view.items.map(item => itemRow(view, item))}
-          </Box>
-        ) : null}
-        {summary?.now ? <Text>{clip(summary.now, inner, 2)}</Text> : null}
-        {card.paused ? <Text color="warning">{tx('paused', { reason: card.paused })}</Text> : null}
-        {card.summaryAt ? <Text dimColor>{tx('summarized', { t: ago(lang, card.summaryAt, now) })}</Text> : null}
-      </Box>
-    )
-  }
+    </Box>
+  )
 
   const taskList = (
     <Box flexDirection="column" rowGap="sm">
@@ -187,9 +148,14 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
       </Box>
       {settings.divider ? divider($, e, settings.taskRows) : null}
       <Box flexDirection="column" rowGap="sm">
-        {header(tx('updates'), sessions.length, false)}
+        {header(tx('updates'), feed.length, false)}
+        {paused.map(card => (
+          <Text key={`paused-${card.sid}`} color="warning">
+            {card.name}: {tx('paused', { reason: card.paused ?? '' })}
+          </Text>
+        ))}
         <Box flexDirection="column" rowGap="sm">
-          {sessions.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : sessions.map(sessionCard)}
+          {feed.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : feed.map(feedCard)}
         </Box>
       </Box>
     </Box>

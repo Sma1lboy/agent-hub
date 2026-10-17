@@ -79,29 +79,6 @@ export function feedRows(snap: Snapshot): FeedRow[] {
     .sort((a, b) => b.at - a.at)
 }
 
-export type Chip = 'working' | 'idle' | 'done' | 'blocked' | 'offline'
-
-export type SessionView = { card: Card; items: FeedItem[]; chip: Chip; at: number }
-
-/**
- * One summary card per session: its unread messages oldest first, under its goal and state.
- * A live session shows once it has a summary; a closed one only while it has unread messages.
- */
-export function sessionViews(snap: Snapshot, now: number): SessionView[] {
-  const acked = new Set(snap.acked)
-  return snap.cards
-    .map(card => {
-      const live = isLive(card, now)
-      const items = card.feed.filter(item => !acked.has(item.id)).sort((a, b) => a.at - b.at)
-      const chip: Chip = !live ? 'offline' : card.busy ? 'working' : card.summary?.state === 'done' ? 'done' : card.summary?.state === 'blocked' ? 'blocked' : 'idle'
-      const at = Math.max(card.summaryAt ?? 0, ...items.map(item => item.at))
-      return { card, items, chip, at, live }
-    })
-    .filter(view => view.items.length > 0 || (view.live && (view.card.summary || view.card.paused)))
-    .sort((a, b) => b.at - a.at)
-    .map(({ live: _, ...view }) => view)
-}
-
 export const pausedCards = (snap: Snapshot, now: number) => snap.cards.filter(card => card.paused && isLive(card, now))
 
 /** Store keys old enough to drop. Mutes stay: they are the person's preferences. */
@@ -150,9 +127,7 @@ export function parseSummary(text: string): Summary | null {
   try {
     const v = JSON.parse(match[0]) as Partial<Summary>
     const list = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string' && s.trim() !== '').map(s => s.trim()) : [])
-    const line = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : undefined)
-    const state = v.state === 'done' || v.state === 'blocked' || v.state === 'in_progress' ? v.state : undefined
-    return { milestones: list(v.milestones), authorized: list(v.authorized), goal: line(v.goal), now: line(v.now), state }
+    return { milestones: list(v.milestones), authorized: list(v.authorized) }
   } catch {
     return null
   }
@@ -173,11 +148,7 @@ export function summaryPrompt(transcript: string, prev: Summary | undefined, mut
   const muted = mutes.length ? mutes.map(m => `- ${m.text}`).join('\n') : '(none)'
   return [
     'You maintain a running progress summary of one Claude Code session for its owner, who watches many sessions at once.',
-    'Return ONLY a JSON object: {"goal": string, "now": string, "state": "in_progress" | "blocked" | "done", "milestones": string[], "authorized": string[]}.',
-    '',
-    'goal: what the session is working towards, one short line (the owner\'s ask, not the latest step).',
-    'now: where it stands at the end of the transcript, one short line (what just happened, what is next or what it waits on).',
-    'state: "done" when the goal is met and nothing is pending, "blocked" when it waits on the owner or something outside, else "in_progress".',
+    'Return ONLY a JSON object: {"milestones": string[], "authorized": string[]}.',
     '',
     'milestones: coarse, finished outcomes the owner would care about (a feature works, a bug is fixed, a PR is open, tests pass, a release is out).',
     'A milestone is a change that is DONE and WORKING. These are never milestones: a single tool call; reading, exploring or explaining code; answering a question; a plan; a step of a task that is not finished yet (tests failing, "next I will...", half-done refactors). When unsure, leave it out: an empty list is the usual answer.',
@@ -189,7 +160,7 @@ export function summaryPrompt(transcript: string, prev: Summary | undefined, mut
     muted,
     '',
     'Previous summary:',
-    JSON.stringify({ milestones: prev?.milestones ?? [], authorized: prev?.authorized ?? [] }),
+    JSON.stringify(prev ?? { milestones: [], authorized: [] }),
     '',
     'Transcript (oldest first, trimmed):',
     transcript,
@@ -226,12 +197,6 @@ const EN = {
   updates: 'Summary',
   nothingWaiting: 'Nothing is waiting on you.',
   noUpdates: 'No summaries yet. Each session shows up here after a turn that used tools.',
-  summarized: 'summarized {t}',
-  chipWorking: 'Working',
-  chipIdle: 'Idle',
-  chipDone: 'Done',
-  chipBlocked: 'Blocked',
-  chipOffline: 'Offline',
   done: 'Done',
   send: 'Send',
   answerPlaceholder: 'Type your answer, Enter to send',
@@ -266,12 +231,6 @@ const ZH: Copy = {
   updates: '进展',
   nothingWaiting: '没有等你处理的事。',
   noUpdates: '还没有总结。session 跑完一轮用过工具的对话后会出现在这里。',
-  summarized: '{t}总结',
-  chipWorking: '进行中',
-  chipIdle: '空闲',
-  chipDone: '已完成',
-  chipBlocked: '受阻',
-  chipOffline: '已离开',
   done: '完成',
   send: '发送',
   answerPlaceholder: '写下回答，回车发送',

@@ -1,6 +1,6 @@
 # Agent Hub
 
-A Claude Code mod that puts every session on your machine into one panel. The top half, To do, lists what each agent is waiting on you for. The bottom half, Summary, has one card per session: what it is working towards, what it finished, and where it stands.
+A Claude Code mod that puts every session on your machine into one panel. The top half, To do, lists what each agent is waiting on you for. The bottom half, Summary, is a stream of what the agents got done: one card per message, newest first, each naming the project it came from.
 
 ```
 To do 2
@@ -20,24 +20,24 @@ To do 2
 │ [ Never, alert instead ]            │
 ╰─────────────────────────────────────╯
 
-Summary 2
+Summary 3
 ╭─────────────────────────────────────╮
-│ payments-api      ● Blocked  Open ↗ │
-│ Take payments through Stripe        │
-│ Checkout                            │
 │ ↳ Merged MR !128 (memory: may merge │
 │   my own MRs once CI is green)      │
-│ ✓ Checkout flow works end to end;   │
-│   31 tests pass                     │
-│ Waiting on the Stripe test key      │
-│ summarized 7m ago                   │
+│ payments-api · 2m                   │
+│ OK  No more like this  Open ↗       │
 ╰─────────────────────────────────────╯
 ╭─────────────────────────────────────╮
-│ ios-client           ● Done  Open ↗ │
-│ Release iOS client 2.4.0            │
-│ ✓ Crash on launch for iOS 17 fixed  │
-│ Build 311 passed TestFlight review  │
-│ summarized 7m ago                   │
+│ ✓ Crash on launch for iOS 17 fixed; │
+│   repro test added                  │
+│ ios-client · 15m                    │
+│ OK  No more like this  Open ↗       │
+╰─────────────────────────────────────╯
+╭─────────────────────────────────────╮
+│ ✓ Checkout flow works end to end;   │
+│   31 tests pass                     │
+│ payments-api · 18m                  │
+│ OK  No more like this  Open ↗       │
 ╰─────────────────────────────────────╯
 ```
 
@@ -83,14 +83,14 @@ Guards:
 
 ### Summary
 
-After each turn that used tools, Agent Hub asks Haiku to summarize that session's transcript, at most once every 5 minutes per session. If Haiku is unavailable it uses the session's own model. Each session gets one card: its goal, a state dot (Working while a turn runs, Idle, Blocked when it waits on you or something outside, Done when the goal is met, Offline once it has left), its unread messages, where it stands now, and when it was last summarized. The new summary is compared with the previous one, and each new line becomes a message on the card:
+After each turn that used tools, Agent Hub asks Haiku to summarize that session's transcript, at most once every 5 minutes per session. If Haiku is unavailable it uses the session's own model. The new summary is compared with the previous one, and each new line becomes its own message in the stream, newest first, labelled with its project:
 
 - **✓ milestone**: something done and working. Reading code, answering a question, a plan or a half-finished step does not count.
 - **↳ done under a standing permission**: something Claude did without asking because your memory, CLAUDE.md, settings or an earlier general yes covered it, with the permission named.
 
-Messages stay after their session closes, so a closed session's card stays while it has unread ones. **OK** hides a message in every session. **No more like this** also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the card says `Updates paused: <reason>`. Where the surface reports the pointer (the desktop app, the fullscreen terminal) OK and No more like this appear when you hover a message; elsewhere they sit under it.
+Messages stay after their session closes. **OK** hides a message in every session. **No more like this** also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the Summary section says `<project>: Updates paused: <reason>`.
 
-**Open ↗** on a task or session card switches the desktop app to that session (`open claude://claude.ai/epitaxy/<id>`). Sessions running in a plain terminal have no such id, so they show no Open.
+**Open ↗** on a task or message switches the desktop app to that session (`open claude://claude.ai/epitaxy/<id>`). Sessions running in a plain terminal have no such id, so they show no Open.
 
 ### How Claude is told to use it
 
@@ -122,7 +122,7 @@ The panel is one TSX tree for the terminal and the desktop app, using Claude Cod
 bun scripts/demo.ts
 ```
 
-Adds three made-up sessions (tasks, summaries, messages) to the installed mod's store, visible for two hours. `bun scripts/demo.ts --clear` removes them.
+Adds three made-up sessions (tasks and messages) to the installed mod's store, visible for two hours. `bun scripts/demo.ts --clear` removes them.
 
 ## Develop
 
