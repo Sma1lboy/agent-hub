@@ -148,7 +148,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     <Box flexDirection="column" rowGap="sm">
       {tasks.length === 0 ? <Text dimColor>{tx('nothingWaiting')}</Text> : (showAll ? tasks : tasks.slice(0, TASKS_SHOWN)).map(taskCard)}
       {tasks.length > TASKS_SHOWN ? (
-        <Box flexDirection="row">
+        <Box key="more-tasks-row" flexDirection="row">
           <Button
             key="more-tasks"
             plain

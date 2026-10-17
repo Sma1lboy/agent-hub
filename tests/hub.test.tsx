@@ -182,8 +182,7 @@ test("answering another session's task writes its reply key and hides the task",
 
 test('past three tasks the rest fold into "+N more", so the summary stays in view', async ($, on) => {
   const tasks = [1, 2, 3, 4, 5].map(i => ({ id: `t${i}`, kind: 'do' as const, title: `Task number ${i}`, createdAt: NOW - 1000 + i }))
-  const { store } = stub(on, { entries: { [cardKey('other')]: otherCard({ tasks }) } })
-  void store
+  stub(on, { entries: { [cardKey('other')]: otherCard({ tasks }) } })
   await start($)
   const ui = await $.ui.mount(pane('desktop'))
   expect(await ui.find({ type: 'Text', text: 'Task number 3' })).toBeDefined()
