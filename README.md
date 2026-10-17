@@ -30,12 +30,6 @@ Updates · 2
 
 Needs Claude Code 2.1.299 or newer.
 
-From GitHub, at the prompt of a terminal session:
-
-```
-/plugin install agent-hub --marketplace Sma1lboy/agent-hub
-```
-
 From a local clone (edits are picked up by `/reload-plugins`, no reinstall):
 
 ```bash
@@ -108,6 +102,8 @@ Every session reads the store every 3 seconds and writes a heartbeat every 60. A
 The panel is one TSX tree for the terminal and the desktop app, using Claude Code's theme colors only (`claude` orange as the accent; `warning`, `success`, `error`, `subtle` for meaning). Cards have round borders that turn orange on hover. The divider, when on, is a `Client` module that takes the drag and posts the new task-area height.
 
 ## Develop
+
+The `claude` on your PATH must be 2.1.299 or newer, or `validate` rejects the hooks it does not know yet. The desktop app's own binary is at `$CLAUDE_CODE_EXECPATH`.
 
 ```bash
 claude plugin validate .claude-plugin/plugin.json

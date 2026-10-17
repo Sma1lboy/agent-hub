@@ -180,14 +180,14 @@ async function poll($: EngineInterface) {
 /** Hands each answer to the model as a prompt: at once when idle, after the turn when busy. */
 async function deliver($: EngineInterface, replies: readonly (readonly [string, Reply])[]) {
   const card = (await $.store.get(cardKey(rt.sid))) as Card | undefined
+  for (const [id, reply] of replies) {
+    const task = card?.tasks.find(x => x.id === id)
+    // Submit first: if it fails, the reply key stays and the next poll tries again.
+    if (task) await $.prompt.submit({ text: replyMessage(task, reply) })
+    await $.store.delete(replyKey(rt.sid, id))
+  }
   const answered = new Set(replies.map(([id]) => id))
   await mutateCard($, c => ({ ...c, tasks: c.tasks.filter(task => !answered.has(task.id)) }))
-  for (const [id, reply] of replies) {
-    await $.store.delete(replyKey(rt.sid, id))
-    const task = card?.tasks.find(x => x.id === id)
-    if (!task) continue
-    await $.prompt.submit({ text: replyMessage(task, reply) })
-  }
 }
 
 // ---- the feed ----
