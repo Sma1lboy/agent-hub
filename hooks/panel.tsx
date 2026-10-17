@@ -1,9 +1,9 @@
 import { atom, read } from 'claude-code'
-import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
+import type { Color, EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
-import type { HubSettings } from '../types'
-import { DEFAULT_SETTINGS, ago, feedRows, openTasks, pausedCards, t } from './hub'
-import type { CopyKey, FeedRow, OpenTask } from './hub'
+import type { FeedItem, HubSettings } from '../types'
+import { DEFAULT_SETTINGS, ago, openTasks, sessionViews, t } from './hub'
+import type { Chip, CopyKey, FeedRow, OpenTask, SessionView } from './hub'
 
 const snapAtom = atom({ plugin: 'agent-hub', key: 'snap' } as const, null)
 const settingsAtom = atom({ plugin: 'agent-hub', key: 'settings' } as const, DEFAULT_SETTINGS)
@@ -26,6 +26,15 @@ type PaneInput = RenderInput<'Pane'>
 
 const KIND_KEY: Record<OpenTask['kind'], CopyKey> = { do: 'kindDo', answer: 'kindAnswer', choose: 'kindChoose' }
 
+const CHIP_KEY: Record<Chip, CopyKey> = { working: 'chipWorking', idle: 'chipIdle', done: 'chipDone', blocked: 'chipBlocked', offline: 'chipOffline' }
+const CHIP_COLOR: Record<Chip, Color> = { working: 'claude', idle: 'subtle', done: 'success', blocked: 'warning', offline: 'inactive' }
+
+/** Cuts text to about `lines` lines of `columns`, so one long detail cannot stretch a card. */
+const clip = (text: string, columns: number, lines: number) => {
+  const room = Math.max(24, columns * lines)
+  return text.length > room ? `${text.slice(0, room - 1).trimEnd()}…` : text
+}
+
 export async function renderHub($: EngineInterface, e: PaneInput, act: Actions): Promise<RenderElement> {
   const els = $.ui.resolve(e)
   const { Box, Text, Button } = els
@@ -38,67 +47,124 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   const { lang } = settings
   const tx = (key: CopyKey, vars?: Record<string, string | number>) => t(lang, key, vars)
 
-  const tasks = snap ? openTasks(snap, now) : []
-  const feed = snap ? feedRows(snap) : []
-  const paused = snap ? pausedCards(snap, now) : []
-  const canJump = (hostId?: string): hostId is string => !!hostId && hostId !== snap?.cards.find(c => c.sid === snap.self)?.hostId
+  // Inside a card: the pane's width less the border and padding.
+  const inner = Math.max(20, (e.props.bodyColumns || e.viewport?.columns || 60) - 4)
+  const wide = inner >= 56
+  // Per-message actions show on hover where the surface reports the pointer, inline elsewhere.
+  const hovers = e.surface === 'desktop' || e.viewport?.isFullscreen === true
 
-  const jumpButton = (key: string, hostId?: string) =>
-    canJump(hostId) ? (
-      <Button key={key} plain dimColor hover={{ color: 'claude', dimColor: false }} label={tx('jump')} onPress={() => act.jump(hostId)} />
-    ) : null
+  const tasks = snap ? openTasks(snap, now) : []
+  const sessions = snap ? sessionViews(snap, now) : []
+  const selfHost = snap?.cards.find(c => c.sid === snap.self)?.hostId
+  const canJump = (hostId?: string): hostId is string => !!hostId && hostId !== selfHost
+
+  const openButton = (key: string, hostId?: string) =>
+    canJump(hostId) ? <Button key={key} plain dimColor hover={{ color: 'claude', dimColor: false }} label={tx('jump')} onPress={() => act.jump(hostId)} /> : null
+
+  const header = (label: string, count: number, accent: boolean) => (
+    <Text>
+      <Text weight="bold">{label}</Text> <Text color={accent && count > 0 ? 'claude' : 'subtle'}>{count}</Text>
+    </Text>
+  )
 
   const taskCard = (task: OpenTask) => {
     const key = `${task.sid}:${task.id}`
+    const options = task.options ?? []
+    const optionsInRow = wide && options.join('    ').length + 8 < inner
     return (
       <Box key={`task-${key}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX={1}>
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
           <Text>
-            <Text color="warning">{tx(KIND_KEY[task.kind])}</Text> <Text weight="semibold">{task.title}</Text>
+            <Text weight="bold">{task.name}</Text>
+            <Text dimColor>
+              {' '}
+              · {tx(KIND_KEY[task.kind])} · {ago(lang, task.createdAt, now, true)}
+            </Text>
           </Text>
-          {jumpButton(`jump-${key}`, task.hostId)}
+          {openButton(`jump-${key}`, task.hostId)}
         </Box>
-        <Text dimColor>
-          {task.name} · {ago(lang, task.createdAt, now)}
-        </Text>
-        {task.detail ? <Text>{task.detail}</Text> : null}
+        <Text weight="semibold">{task.title}</Text>
+        {task.detail ? <Text dimColor>{clip(task.detail, inner, 2)}</Text> : null}
         {task.kind === 'do' ? (
-          <Box flexDirection="row">
+          <Box flexDirection="row" marginTop={1}>
             <Button key={`done-${key}`} variant="secondary" label={tx('done')} onPress={() => act.complete(task)} />
           </Box>
         ) : task.kind === 'choose' ? (
-          <Box flexDirection="row" gap={1} flexWrap="wrap">
-            {(task.options ?? []).map((option, i) => (
+          <Box flexDirection={optionsInRow ? 'row' : 'column'} gap={optionsInRow ? 1 : 0} marginTop={1}>
+            {options.map((option, i) => (
               <Button key={`opt-${key}-${i}`} variant="secondary" label={option} onPress={() => act.choose(task, option)} />
             ))}
           </Box>
         ) : Input ? (
-          <Input key={`ans-${key}`} placeholder={tx('answerPlaceholder')} submitLabel={tx('send')} onSubmit={(value: string) => (value.trim() ? act.answer(task, value) : undefined)} />
+          <Box marginTop={1}>
+            <Input key={`ans-${key}`} placeholder={tx('answerPlaceholder')} submitLabel={tx('send')} onSubmit={(value: string) => (value.trim() ? act.answer(task, value) : undefined)} />
+          </Box>
         ) : null}
         {errors[key] ? <Text color="error">{errors[key]}</Text> : null}
       </Box>
     )
   }
 
-  const feedRow = (row: FeedRow) => (
-    <Box key={`feed-${row.id}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX={1}>
-      <Text>
-        {row.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>}
-        {row.text}
-      </Text>
-      <Box flexDirection="row" gap={2}>
-        <Text dimColor>
-          {row.name} · {ago(lang, row.at, now)}
-        </Text>
-        <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
-        <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />
-        {jumpButton(`fjump-${row.id}`, row.hostId)}
+  const itemActions = (row: FeedRow) => [
+    <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />,
+    <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />,
+  ]
+
+  const itemRow = (view: SessionView, item: FeedItem) => {
+    const row: FeedRow = { ...item, sid: view.card.sid, name: view.card.name, hostId: view.card.hostId }
+    const mark = item.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>
+    return hovers ? (
+      <Box key={`item-${item.id}`} flexDirection="row">
+        {mark}
+        <Box flexShrink={1}>
+          <Text>{item.text}</Text>
+        </Box>
+        <Box display="none" hover={{ display: 'flex' }} position="absolute" right={0} top={0} gap={2} paddingX={1} backgroundColor="inverseText">
+          {itemActions(row)}
+        </Box>
       </Box>
-    </Box>
-  )
+    ) : (
+      <Box key={`item-${item.id}`} flexDirection="column">
+        <Box flexDirection="row">
+          {mark}
+          <Box flexShrink={1}>
+            <Text>{item.text}</Text>
+          </Box>
+        </Box>
+        <Box flexDirection="row" gap={2} marginLeft={2}>
+          {itemActions(row)}
+        </Box>
+      </Box>
+    )
+  }
+
+  const sessionCard = (view: SessionView) => {
+    const { card } = view
+    const summary = card.summary
+    return (
+      <Box key={`sess-${card.sid}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX={1}>
+        <Box flexDirection="row" justifyContent="space-between" gap={1}>
+          <Text weight="bold">{card.name}</Text>
+          <Box flexDirection="row" gap={2}>
+            <Text color={CHIP_COLOR[view.chip]}>● {tx(CHIP_KEY[view.chip])}</Text>
+            {openButton(`sjump-${card.sid}`, card.hostId)}
+          </Box>
+        </Box>
+        {summary?.goal ? <Text weight="semibold">{clip(summary.goal, inner, 2)}</Text> : null}
+        {view.items.length ? (
+          <Box flexDirection="column">
+            {view.items.map(item => itemRow(view, item))}
+          </Box>
+        ) : null}
+        {summary?.now ? <Text>{clip(summary.now, inner, 2)}</Text> : null}
+        {card.paused ? <Text color="warning">{tx('paused', { reason: card.paused })}</Text> : null}
+        {card.summaryAt ? <Text dimColor>{tx('summarized', { t: ago(lang, card.summaryAt, now) })}</Text> : null}
+      </Box>
+    )
+  }
 
   const taskList = (
-    <Box flexDirection="column" gap={0}>
+    <Box flexDirection="column">
       {tasks.length === 0 ? <Text dimColor>{tx('nothingWaiting')}</Text> : tasks.map(taskCard)}
     </Box>
   )
@@ -106,9 +172,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
-        <Text weight="bold" color={tasks.length ? 'claude' : undefined}>
-          {tx('needsYou')} · {tasks.length}
-        </Text>
+        {header(tx('needsYou'), tasks.length, true)}
         {settings.divider ? (
           <Box flexDirection="column" height={settings.taskRows} overflow="hidden">
             {taskList}
@@ -119,15 +183,8 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
       </Box>
       {settings.divider ? divider($, e, settings.taskRows) : null}
       <Box flexDirection="column">
-        <Text weight="bold">
-          {tx('updates')} · {feed.length}
-        </Text>
-        {paused.map(card => (
-          <Text key={`paused-${card.sid}`} color="warning">
-            {card.name}: {tx('paused', { reason: card.paused ?? '' })}
-          </Text>
-        ))}
-        {feed.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : feed.map(feedRow)}
+        {header(tx('updates'), sessions.length, false)}
+        {sessions.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : sessions.map(sessionCard)}
       </Box>
     </Box>
   )

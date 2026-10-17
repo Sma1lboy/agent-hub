@@ -79,6 +79,29 @@ export function feedRows(snap: Snapshot): FeedRow[] {
     .sort((a, b) => b.at - a.at)
 }
 
+export type Chip = 'working' | 'idle' | 'done' | 'blocked' | 'offline'
+
+export type SessionView = { card: Card; items: FeedItem[]; chip: Chip; at: number }
+
+/**
+ * One summary card per session: its unread messages oldest first, under its goal and state.
+ * A live session shows once it has a summary; a closed one only while it has unread messages.
+ */
+export function sessionViews(snap: Snapshot, now: number): SessionView[] {
+  const acked = new Set(snap.acked)
+  return snap.cards
+    .map(card => {
+      const live = isLive(card, now)
+      const items = card.feed.filter(item => !acked.has(item.id)).sort((a, b) => a.at - b.at)
+      const chip: Chip = !live ? 'offline' : card.busy ? 'working' : card.summary?.state === 'done' ? 'done' : card.summary?.state === 'blocked' ? 'blocked' : 'idle'
+      const at = Math.max(card.summaryAt ?? 0, ...items.map(item => item.at))
+      return { card, items, chip, at, live }
+    })
+    .filter(view => view.items.length > 0 || (view.live && (view.card.summary || view.card.paused)))
+    .sort((a, b) => b.at - a.at)
+    .map(({ live: _, ...view }) => view)
+}
+
 export const pausedCards = (snap: Snapshot, now: number) => snap.cards.filter(card => card.paused && isLive(card, now))
 
 /** Store keys old enough to drop. Mutes stay: they are the person's preferences. */
@@ -127,7 +150,9 @@ export function parseSummary(text: string): Summary | null {
   try {
     const v = JSON.parse(match[0]) as Partial<Summary>
     const list = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string' && s.trim() !== '').map(s => s.trim()) : [])
-    return { milestones: list(v.milestones), authorized: list(v.authorized) }
+    const line = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : undefined)
+    const state = v.state === 'done' || v.state === 'blocked' || v.state === 'in_progress' ? v.state : undefined
+    return { milestones: list(v.milestones), authorized: list(v.authorized), goal: line(v.goal), now: line(v.now), state }
   } catch {
     return null
   }
@@ -148,7 +173,11 @@ export function summaryPrompt(transcript: string, prev: Summary | undefined, mut
   const muted = mutes.length ? mutes.map(m => `- ${m.text}`).join('\n') : '(none)'
   return [
     'You maintain a running progress summary of one Claude Code session for its owner, who watches many sessions at once.',
-    'Return ONLY a JSON object: {"milestones": string[], "authorized": string[]}.',
+    'Return ONLY a JSON object: {"goal": string, "now": string, "state": "in_progress" | "blocked" | "done", "milestones": string[], "authorized": string[]}.',
+    '',
+    'goal: what the session is working towards, one short line (the owner\'s ask, not the latest step).',
+    'now: where it stands at the end of the transcript, one short line (what just happened, what is next or what it waits on).',
+    'state: "done" when the goal is met and nothing is pending, "blocked" when it waits on the owner or something outside, else "in_progress".',
     '',
     'milestones: coarse, finished outcomes the owner would care about (a feature works, a bug is fixed, a PR is open, tests pass, a release is out).',
     'A milestone is a change that is DONE and WORKING. These are never milestones: a single tool call; reading, exploring or explaining code; answering a question; a plan; a step of a task that is not finished yet (tests failing, "next I will...", half-done refactors). When unsure, leave it out: an empty list is the usual answer.',
@@ -160,7 +189,7 @@ export function summaryPrompt(transcript: string, prev: Summary | undefined, mut
     muted,
     '',
     'Previous summary:',
-    JSON.stringify(prev ?? { milestones: [], authorized: [] }),
+    JSON.stringify({ milestones: prev?.milestones ?? [], authorized: prev?.authorized ?? [] }),
     '',
     'Transcript (oldest first, trimmed):',
     transcript,
@@ -193,14 +222,20 @@ export const shortHash = (s: string) => {
 const EN = {
   title: 'Agent Hub',
   settingsTitle: 'Agent Hub settings',
-  needsYou: 'Needs you',
-  updates: 'Updates',
-  nothingWaiting: 'Nothing waiting on you.',
-  noUpdates: 'No updates yet. Finished milestones from every session show up here.',
+  needsYou: 'To do',
+  updates: 'Summary',
+  nothingWaiting: 'Nothing is waiting on you.',
+  noUpdates: 'No summaries yet. Each session shows up here after a turn that used tools.',
+  summarized: 'summarized {t}',
+  chipWorking: 'Working',
+  chipIdle: 'Idle',
+  chipDone: 'Done',
+  chipBlocked: 'Blocked',
+  chipOffline: 'Offline',
   done: 'Done',
   send: 'Send',
-  answerPlaceholder: 'Type your answer',
-  jump: 'Jump ↗',
+  answerPlaceholder: 'Type your answer, Enter to send',
+  jump: 'Open ↗',
   ok: 'OK',
   noMore: 'No more like this',
   paused: 'Updates paused: {reason}',
@@ -208,8 +243,8 @@ const EN = {
   kindDo: 'do',
   kindAnswer: 'answer',
   kindChoose: 'choose',
-  status: '☐ {n} tasks need you · /hub',
-  status1: '☐ 1 task needs you · /hub',
+  status: '{n} tasks need you · /hub',
+  status1: '1 task needs you · /hub',
   opened: 'Agent Hub opened.',
   settingsOpened: 'Agent Hub settings opened.',
   language: 'Language',
@@ -227,13 +262,19 @@ type Copy = typeof EN
 const ZH: Copy = {
   title: 'Agent Hub',
   settingsTitle: 'Agent Hub 设置',
-  needsYou: '待你处理',
+  needsYou: '待办',
   updates: '进展',
   nothingWaiting: '没有等你处理的事。',
-  noUpdates: '还没有进展。各个 session 完成的 milestone 会出现在这里。',
+  noUpdates: '还没有总结。session 跑完一轮用过工具的对话后会出现在这里。',
+  summarized: '{t}总结',
+  chipWorking: '进行中',
+  chipIdle: '空闲',
+  chipDone: '已完成',
+  chipBlocked: '受阻',
+  chipOffline: '已离开',
   done: '完成',
   send: '发送',
-  answerPlaceholder: '写下你的回答',
+  answerPlaceholder: '写下回答，回车发送',
   jump: '跳转 ↗',
   ok: 'OK',
   noMore: '不再显示这类',
@@ -242,8 +283,8 @@ const ZH: Copy = {
   kindDo: '去做',
   kindAnswer: '回答',
   kindChoose: '选择',
-  status: '☐ {n} 个任务等你 · /hub',
-  status1: '☐ 1 个任务等你 · /hub',
+  status: '{n} 个任务等你 · /hub',
+  status1: '1 个任务等你 · /hub',
   opened: '已打开 Agent Hub。',
   settingsOpened: '已打开 Agent Hub 设置。',
   language: '语言',
@@ -263,12 +304,12 @@ export function t(lang: Lang, key: CopyKey, vars: Record<string, string | number
   return TABLES[lang][key].replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? ''))
 }
 
-export function ago(lang: Lang, then: number, now: number): string {
+export function ago(lang: Lang, then: number, now: number, short = false): string {
   const s = Math.max(0, Math.round((now - then) / 1000))
   if (s < 45) return t(lang, 'now')
   const m = Math.round(s / 60)
   const span = m < 60 ? `${m}${lang === 'zh' ? ' 分钟' : 'm'}` : m < 60 * 48 ? `${Math.round(m / 60)}${lang === 'zh' ? ' 小时' : 'h'}` : `${Math.round(m / 1440)}${lang === 'zh' ? ' 天' : 'd'}`
-  return t(lang, 'ago', { t: span })
+  return short ? span : t(lang, 'ago', { t: span })
 }
 
 export const statusText = (lang: Lang, n: number) => (n === 0 ? undefined : n === 1 ? t(lang, 'status1') : t(lang, 'status', { n }))

@@ -1,29 +1,44 @@
 # Agent Hub
 
-A Claude Code mod that puts every session on your machine into one panel. The top half lists what each agent is waiting on you for. The bottom half is a feed of what each agent finished.
+A Claude Code mod that puts every session on your machine into one panel. The top half, To do, lists what each agent is waiting on you for. The bottom half, Summary, has one card per session: what it is working towards, what it finished, and where it stands.
 
 ```
-Needs you · 2
-╭───────────────────────────────────────────────────╮
-│ do  Add STRIPE_SECRET_KEY to .env.local    Jump ↗ │
-│ payments · 3m ago                                 │
-│ [ Done ]                                          │
-╰───────────────────────────────────────────────────╯
-╭───────────────────────────────────────────────────╮
-│ choose  Which database for notes-app?      Jump ↗ │
-│ notes-app · just now                              │
-│ [ Postgres ]  [ SQLite ]                          │
-╰───────────────────────────────────────────────────╯
+To do 2
+╭─────────────────────────────────────╮
+│ payments-api · do · 4m       Open ↗ │
+│ Add STRIPE_SECRET_KEY to .env.local │
+│ Use the test-mode secret key from   │
+│ dashboard.stripe.com → Developers…  │
+│ [ Done ]                            │
+╰─────────────────────────────────────╯
+╭─────────────────────────────────────╮
+│ payments-api · choose · 1m   Open ↗ │
+│ Retry failed webhooks how many      │
+│ times?                              │
+│ [ 3 times ]                         │
+│ [ 5 times ]                         │
+│ [ Never, alert instead ]            │
+╰─────────────────────────────────────╯
 
-Updates · 2
-╭───────────────────────────────────────────────────╮
-│ ✓ /health endpoint returns the git sha; tests pass│
-│ api · 12m ago   OK   No more like this   Jump ↗   │
-╰───────────────────────────────────────────────────╯
-╭───────────────────────────────────────────────────╮
-│ ↳ Merged MR !42 (memory: may merge docs MRs)      │
-│ docs · 40m ago   OK   No more like this           │
-╰───────────────────────────────────────────────────╯
+Summary 2
+╭─────────────────────────────────────╮
+│ payments-api      ● Blocked  Open ↗ │
+│ Take payments through Stripe        │
+│ Checkout                            │
+│ ↳ Merged MR !128 (memory: may merge │
+│   my own MRs once CI is green)      │
+│ ✓ Checkout flow works end to end;   │
+│   31 tests pass                     │
+│ Waiting on the Stripe test key      │
+│ summarized 7m ago                   │
+╰─────────────────────────────────────╯
+╭─────────────────────────────────────╮
+│ ios-client           ● Done  Open ↗ │
+│ Release iOS client 2.4.0            │
+│ ✓ Crash on launch for iOS 17 fixed  │
+│ Build 311 passed TestFlight review  │
+│ summarized 7m ago                   │
+╰─────────────────────────────────────╯
 ```
 
 ## Install
@@ -46,7 +61,7 @@ In the desktop app, where `/plugin` does not run: click + next to the prompt box
 
 - `/hub` opens the panel.
 - `/hub-settings` opens the settings: language (English or 中文, default English), open the panel when a task arrives (default on), draggable divider between the two halves (default off). Settings apply to every session on the machine.
-- The status line shows `☐ N tasks need you · /hub`, counted across all sessions.
+- The status line shows `N tasks need you · /hub`, counted across all sessions.
 
 ### Tasks
 
@@ -66,16 +81,16 @@ Guards:
 - Claude can take a task back with `withdraw_task`, and list its open ones with `list_tasks`.
 - After a compact, Claude is told again which of its tasks are still open.
 
-### Updates
+### Summary
 
-After each turn that used tools, Agent Hub asks Haiku to summarize that session's transcript, at most once every 5 minutes per session. If Haiku is unavailable it uses the session's own model. The new summary is compared with the previous one, and each new line becomes a message:
+After each turn that used tools, Agent Hub asks Haiku to summarize that session's transcript, at most once every 5 minutes per session. If Haiku is unavailable it uses the session's own model. Each session gets one card: its goal, a state dot (Working while a turn runs, Idle, Blocked when it waits on you or something outside, Done when the goal is met, Offline once it has left), its unread messages, where it stands now, and when it was last summarized. The new summary is compared with the previous one, and each new line becomes a message on the card:
 
 - **✓ milestone**: something done and working. Reading code, answering a question, a plan or a half-finished step does not count.
 - **↳ done under a standing permission**: something Claude did without asking because your memory, CLAUDE.md, settings or an earlier general yes covered it, with the permission named.
 
-Messages stay after their session closes. **OK** hides a message in every session. **No more like this** also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the panel says `Updates paused: <reason>`.
+Messages stay after their session closes, so a closed session's card stays while it has unread ones. **OK** hides a message in every session. **No more like this** also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the card says `Updates paused: <reason>`. Where the surface reports the pointer (the desktop app, the fullscreen terminal) OK and No more like this appear when you hover a message; elsewhere they sit under it.
 
-**Jump ↗** on a task or message switches the desktop app to that session (`open claude://claude.ai/epitaxy/<id>`). Sessions running in a plain terminal have no such id, so they show no Jump.
+**Open ↗** on a task or session card switches the desktop app to that session (`open claude://claude.ai/epitaxy/<id>`). Sessions running in a plain terminal have no such id, so they show no Open.
 
 ### How Claude is told to use it
 
@@ -99,7 +114,15 @@ Every session reads the store every 3 seconds and writes a heartbeat every 60. A
 
 `/reload-plugins` does not fire `session.start`, so joining the store and registering the commands and tools happens on whichever hook runs first.
 
-The panel is one TSX tree for the terminal and the desktop app, using Claude Code's theme colors only (`claude` orange as the accent; `warning`, `success`, `error`, `subtle` for meaning). Cards have round borders that turn orange on hover. The divider, when on, is a `Client` module that takes the drag and posts the new task-area height.
+The panel is one TSX tree for the terminal and the desktop app, using Claude Code's theme colors only (`claude` orange as the accent; `warning`, `success`, `error`, `subtle` for meaning). Cards have round borders that turn orange on hover, and lay out by the pane's width: in a narrow dock the options of a choose-task stack, a long detail is cut to two lines. The divider, when on, is a short handle drawn by a `Client` module that takes the drag and posts the new task-area height.
+
+## Demo data
+
+```bash
+bun scripts/demo.ts
+```
+
+Adds three made-up sessions (tasks, summaries, messages) to the installed mod's store, visible for two hours. `bun scripts/demo.ts --clear` removes them.
 
 ## Develop
 

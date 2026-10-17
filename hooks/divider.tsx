@@ -27,15 +27,15 @@ const Divider: ClientModule<Props, State> = (props, surface) => {
     surface.setState(state)
   }
 
+  // A short handle in the middle, like a sheet's grabber; the number shows while dragging.
   const width = Math.max(8, surface.columns || 40)
-  const label = state.from !== undefined ? ` ${props.rows + state.delta} ` : ' ⇕ '
-  const side = Math.max(1, Math.floor((width - label.length) / 2))
+  const handle = state.from !== undefined ? ` ${props.rows + state.delta} rows ` : '────────'
+  const side = Math.max(0, Math.floor((width - handle.length) / 2))
   const active = state.hover || state.from !== undefined
   return (
     <Text color={active ? 'claude' : 'subtle'}>
-      {'─'.repeat(side)}
-      {label}
-      {'─'.repeat(Math.max(1, width - side - label.length))}
+      {' '.repeat(side)}
+      {handle}
     </Text>
   )
 }

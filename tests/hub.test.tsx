@@ -127,10 +127,10 @@ test('assign_task puts a task on the panel, on every surface', async ($, on) => 
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(pane(surface))
     expect(await ui.find({ type: 'Text', text: 'Add STRIPE_KEY to .env.local' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /Needs you · 1/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /To do 1/ })).toBeDefined()
     await ui.unmount()
   }
-  expect(calls.status.at(-1)).toBe('☐ 1 task needs you · /hub')
+  expect(calls.status.at(-1)).toBe('1 task needs you · /hub')
 })
 
 test('assign_task refuses bad input, duplicates and a sixth open task', async ($, on) => {
@@ -177,7 +177,7 @@ test("answering another session's task writes its reply key and hides the task",
   await ui.input({ key: 'ans-other:t1', text: 'us-east-1' })
   expect(store.get(replyKey('other', 't1'))).toEqual({ answer: 'us-east-1', at: NOW, by: 'self' })
   expect(await ui.find({ type: 'Text', text: 'Which region should prod use?' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /Nothing waiting/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Nothing is waiting/ })).toBeDefined()
 })
 
 test('an answer that looks like a secret is refused', async ($, on) => {
@@ -232,7 +232,7 @@ test('a turn with tools brings a summary; only new milestones become messages', 
     model: () => {
       round += 1
       return round === 1
-        ? { isAnswered: true, text: '{"milestones":["Login page works end to end"],"authorized":["Merged MR !42 (memory: may merge)"]}' }
+        ? { isAnswered: true, text: '{"goal":"Ship the login page","now":"Login merged; nothing pending","state":"done","milestones":["Login page works end to end"],"authorized":["Merged MR !42 (memory: may merge)"]}' }
         : { isAnswered: true, text: '{"milestones":["Login page works end to end","Tests green on CI"],"authorized":["Merged MR !42 (memory: may merge)"]}' }
     },
   })
@@ -244,8 +244,12 @@ test('a turn with tools brings a summary; only new milestones become messages', 
   expect(calls.models).toEqual(['haiku'])
 
   const ui = await $.ui.mount(pane('terminal'))
-  expect(await ui.find({ type: 'Text', text: /✓ Login page works end to end/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /↳ Merged MR !42/ })).toBeDefined()
+  // One card for the session: its goal, state chip, messages and where it stands.
+  expect(await ui.find({ type: 'Text', text: 'Ship the login page' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /● Done/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Login page works end to end' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Merged MR !42/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Login merged; nothing pending' })).toBeDefined()
 
   // Another turn within five minutes waits; after that, only the new line is added.
   await $.tool.call({ tool: 'Read', tool_use_id: 'r2', file_path: '/work/alpha/b.ts' } as never).catch(() => undefined)
@@ -329,8 +333,8 @@ test('settings: language, auto-open and divider sync through the store', async (
   await clock.advance(3_000)
   expect(calls.opened.filter(id => id === 'agent-hub')).toEqual([])
   const hub = await $.ui.mount(pane('desktop'))
-  expect(await hub.find({ type: 'Text', text: /待你处理 · 1/ })).toBeDefined()
-  expect(calls.status.at(-1)).toBe('☐ 1 个任务等你 · /hub')
+  expect(await hub.find({ type: 'Text', text: /待办 1/ })).toBeDefined()
+  expect(calls.status.at(-1)).toBe('1 个任务等你 · /hub')
 })
 
 test('a task from another session opens the panel when auto-open is on', async ($, on) => {
@@ -387,7 +391,7 @@ test('the divider, when on, drags the task area taller', async ($, on) => {
   await start($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(pane(surface))
-    expect(textOf(await ui.find({ type: 'Text', text: /⇕/, in: 'divider' }))).toContain('⇕')
+    expect(textOf(await ui.find({ type: 'Text', text: /────/, in: 'divider' }))).toContain('────')
     await ui.unmount()
   }
   const ui = await $.ui.mount(pane('terminal'))
