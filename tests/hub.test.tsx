@@ -303,7 +303,7 @@ test("when Haiku is unavailable the session's own model writes the summary; when
   expect(await ui.find({ type: 'Text', text: /Updates paused: API error 404 not_found_error/ })).toBeDefined()
 })
 
-test('OK hides a message everywhere; No more like this also mutes its kind in later summaries', async ($, on) => {
+test('OK hides a message everywhere; No more like this, once turned on in settings, also mutes its kind in later summaries', async ($, on) => {
   const feed = [
     { id: 'other:f1', kind: 'milestone' as const, text: 'Bumped lodash', at: NOW - 2000 },
     { id: 'other:f2', kind: 'milestone' as const, text: 'Release 2.0 is out', at: NOW - 1000 },
@@ -315,6 +315,10 @@ test('OK hides a message everywhere; No more like this also mutes its kind in la
   expect(store.get('ack:other:f2')).toBe(NOW)
   expect(await ui.find({ type: 'Text', text: /Release 2.0/ })).toBeUndefined()
 
+  // Off by default: the button appears only after the setting is turned on.
+  expect(await ui.find({ key: 'mute-other:f1' })).toBeUndefined()
+  const settings = await $.ui.mount(pane('terminal', 'agent-hub-settings'))
+  await settings.press({ key: 'toggle-muteButton-on' })
   await ui.press({ key: 'mute-other:f1' })
   expect(store.get('mute:other:f1')).toEqual({ text: 'Bumped lodash', at: NOW })
   expect(await ui.find({ type: 'Text', text: /Bumped lodash/ })).toBeUndefined()
@@ -333,7 +337,7 @@ test('settings: language, auto-open and divider sync through the store', async (
 
   const settings = await $.ui.mount(pane('terminal', 'agent-hub-settings'))
   await settings.press({ key: 'lang-zh' })
-  expect(store.get('settings')).toEqual({ lang: 'zh', autoOpen: true, divider: false, taskRows: 12 })
+  expect(store.get('settings')).toEqual({ lang: 'zh', autoOpen: true, divider: false, muteButton: false, taskRows: 12 })
   expect(await settings.find({ type: 'Text', text: '语言' })).toBeDefined()
   await settings.press({ key: 'toggle-autoOpen-off' })
   expect(((store.get('settings')) as { autoOpen: boolean }).autoOpen).toBe(false)

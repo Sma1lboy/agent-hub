@@ -95,7 +95,10 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
             </Text>
           </Text>
           {task.hostId && task.hostId !== selfHost ? (
-            <Button key={`jump-${key}`} plain dimColor hover={{ color: 'claude', dimColor: false }} label={tx('jump')} onPress={() => act.jump(task.hostId!)} />
+            // Keyed Box of its own, so it lights under the pointer, not whenever the card is hovered.
+            <Box key={`jumphit-${key}`}>
+              <Button key={`jump-${key}`} plain dimColor hover={{ color: 'claude', dimColor: false }} label={tx('jump')} onPress={() => act.jump(task.hostId!)} />
+            </Box>
           ) : null}
         </Box>
         <Text weight="semibold">{task.title}</Text>
@@ -135,8 +138,15 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
           </Text>
           {/* Always drawn, dim at rest: no surface animates a reveal, and a row's actions popping in reads as a glitch. */}
           <Box flexDirection="row" gap="md">
-            <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
-            <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />
+            {/* Each in a keyed Box of its own: a hover lights its nearest keyed Box, which would otherwise be the whole row. */}
+            <Box key={`okhit-${row.id}`}>
+              <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
+            </Box>
+            {settings.muteButton ? (
+              <Box key={`mutehit-${row.id}`}>
+                <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />
+              </Box>
+            ) : null}
           </Box>
         </Box>
       </Box>
@@ -200,7 +210,7 @@ export async function renderSettings($: EngineInterface, e: PaneInput, act: Acti
   const { Box, Text, Button } = $.ui.resolve(e)
   const settings = (await read($, settingsAtom)) ?? DEFAULT_SETTINGS
   const tx = (key: CopyKey) => t(settings.lang, key)
-  const toggle = (key: 'autoOpen' | 'divider') => (
+  const toggle = (key: 'autoOpen' | 'divider' | 'muteButton') => (
     <Box flexDirection="row" gap="sm">
       {([true, false] as const).map(on => (
         <Button key={`toggle-${key}-${on ? 'on' : 'off'}`} variant={settings[key] === on ? 'primary' : 'secondary'} label={on ? tx('on') : tx('off')} onPress={() => act.setSettings({ [key]: on })} />
@@ -225,6 +235,10 @@ export async function renderSettings($: EngineInterface, e: PaneInput, act: Acti
       <Box flexDirection="row" gap={2} alignItems="center">
         <Text>{tx('divider')}</Text>
         {toggle('divider')}
+      </Box>
+      <Box flexDirection="row" gap={2} alignItems="center">
+        <Text>{tx('muteButton')}</Text>
+        {toggle('muteButton')}
       </Box>
       <Text dimColor>{tx('settingsNote')}</Text>
     </Box>

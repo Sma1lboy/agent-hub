@@ -19,7 +19,7 @@ export const ackKey = (id: string) => `ack:${id}`
 export const muteKey = (id: string) => `mute:${id}`
 export const SETTINGS_KEY = 'settings'
 
-export const DEFAULT_SETTINGS: HubSettings = { lang: 'en', autoOpen: true, divider: false, taskRows: 12 }
+export const DEFAULT_SETTINGS: HubSettings = { lang: 'en', autoOpen: true, divider: false, muteButton: false, taskRows: 12 }
 
 export function readSettings(value: unknown): HubSettings {
   const v = (value ?? {}) as Partial<HubSettings>
@@ -27,6 +27,7 @@ export function readSettings(value: unknown): HubSettings {
     lang: v.lang === 'zh' ? 'zh' : 'en',
     autoOpen: v.autoOpen !== false,
     divider: v.divider === true,
+    muteButton: v.muteButton === true,
     taskRows: typeof v.taskRows === 'number' && v.taskRows >= 3 ? Math.round(v.taskRows) : DEFAULT_SETTINGS.taskRows,
   }
 }
@@ -217,6 +218,7 @@ const EN = {
   language: 'Language',
   autoOpen: 'Open when a task arrives',
   divider: 'Draggable divider',
+  muteButton: 'Show "No more like this" on messages',
   on: 'On',
   off: 'Off',
   settingsNote: 'Applies to every session on this machine.',
@@ -253,6 +255,7 @@ const ZH: Copy = {
   language: '语言',
   autoOpen: '来任务时自动打开',
   divider: '可拖动分隔线',
+  muteButton: '消息上显示「不再显示这类」',
   on: '开',
   off: '关',
   settingsNote: '对本机所有 session 生效。',

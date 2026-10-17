@@ -25,19 +25,19 @@ Summary 3
 │ ↳ Merged MR !128 (memory: may merge │
 │   my own MRs once CI is green)      │
 │ payments-api · 2m                   │
-│ OK  No more like this               │
+│ OK                                  │
 ╰─────────────────────────────────────╯
 ╭─────────────────────────────────────╮
 │ ✓ Crash on launch for iOS 17 fixed; │
 │   repro test added                  │
 │ ios-client · 15m                    │
-│ OK  No more like this               │
+│ OK                                  │
 ╰─────────────────────────────────────╯
 ╭─────────────────────────────────────╮
 │ ✓ Checkout flow works end to end;   │
 │   31 tests pass                     │
 │ payments-api · 18m                  │
-│ OK  No more like this               │
+│ OK                                  │
 ╰─────────────────────────────────────╯
 ```
 
@@ -60,7 +60,7 @@ In the desktop app, where `/plugin` does not run: click + next to the prompt box
 ## Use
 
 - `/hub` opens the panel.
-- `/hub-settings` opens the settings: language (English or 中文, default English), open the panel when a task arrives (default on), draggable divider between the two halves (default off). Settings apply to every session on the machine.
+- `/hub-settings` opens the settings: language (English or 中文, default English), open the panel when a task arrives (default on), draggable divider between the two halves (default off), the "No more like this" button on messages (default off). Settings apply to every session on the machine.
 - The status line shows `N tasks need you · /hub`, counted across all sessions.
 
 ### Tasks
@@ -88,7 +88,7 @@ After each turn that used tools, Agent Hub asks Haiku to summarize that session'
 - **✓ milestone**: something done and working. Reading code, answering a question, a plan or a half-finished step does not count.
 - **↳ done under a standing permission**: something Claude did without asking because your memory, CLAUDE.md, settings or an earlier general yes covered it, with the permission named.
 
-Messages stay after their session closes. **OK** hides a message in every session. **No more like this** also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the Summary section says `<project>: Updates paused: <reason>`.
+Messages stay after their session closes. **OK** hides a message in every session. **No more like this** (turn it on in `/hub-settings`) also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the Summary section says `<project>: Updates paused: <reason>`.
 
 **Open ↗** on a task switches the desktop app to the session that handed it out (`open claude://claude.ai/epitaxy/<id>`). Tasks from this session, and from sessions running in a plain terminal (which have no such id), show no Open. Summary messages have no Open.
 
@@ -108,7 +108,7 @@ All data lives in the mod's `$.store`, one JSON file under `~/.claude/plugins/st
 | `reply:<session>:<task>` | an answer to one task | whichever session answered |
 | `ack:<message>` | OK on a message | any session |
 | `mute:<message>` | a "No more like this" | any session |
-| `settings` | the three settings | any session |
+| `settings` | the settings | any session |
 
 Every session reads the store every 3 seconds and writes a heartbeat every 60. A session with no heartbeat for 3 minutes is treated as gone and its tasks leave the panel. Cards, replies and OKs older than 7 days are deleted; mutes are kept.
 
