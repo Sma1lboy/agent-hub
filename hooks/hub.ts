@@ -68,13 +68,13 @@ export function openTasks(snap: Snapshot, now: number): OpenTask[] {
     .sort((a, b) => a.createdAt - b.createdAt)
 }
 
-export type FeedRow = FeedItem & { sid: string; name: string; hostId?: string }
+export type FeedRow = FeedItem & { sid: string; name: string }
 
 /** The progress feed, newest first; kept after its session leaves. */
 export function feedRows(snap: Snapshot): FeedRow[] {
   const acked = new Set(snap.acked)
   return snap.cards
-    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: card.name, hostId: card.hostId })))
+    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: card.name })))
     .filter(item => !acked.has(item.id))
     .sort((a, b) => b.at - a.at)
 }

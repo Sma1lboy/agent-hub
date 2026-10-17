@@ -25,19 +25,19 @@ Summary 3
 │ ↳ Merged MR !128 (memory: may merge │
 │   my own MRs once CI is green)      │
 │ payments-api · 2m                   │
-│ OK  No more like this  Open ↗       │
+│ OK  No more like this               │
 ╰─────────────────────────────────────╯
 ╭─────────────────────────────────────╮
 │ ✓ Crash on launch for iOS 17 fixed; │
 │   repro test added                  │
 │ ios-client · 15m                    │
-│ OK  No more like this  Open ↗       │
+│ OK  No more like this               │
 ╰─────────────────────────────────────╯
 ╭─────────────────────────────────────╮
 │ ✓ Checkout flow works end to end;   │
 │   31 tests pass                     │
 │ payments-api · 18m                  │
-│ OK  No more like this  Open ↗       │
+│ OK  No more like this               │
 ╰─────────────────────────────────────╯
 ```
 
@@ -90,7 +90,7 @@ After each turn that used tools, Agent Hub asks Haiku to summarize that session'
 
 Messages stay after their session closes. **OK** hides a message in every session. **No more like this** also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the Summary section says `<project>: Updates paused: <reason>`.
 
-**Open ↗** on a task or message switches the desktop app to that session (`open claude://claude.ai/epitaxy/<id>`). Sessions running in a plain terminal have no such id, so they show no Open.
+**Open ↗** on a task switches the desktop app to the session that handed it out (`open claude://claude.ai/epitaxy/<id>`). Tasks from this session, and from sessions running in a plain terminal (which have no such id), show no Open. Summary messages have no Open.
 
 ### How Claude is told to use it
 

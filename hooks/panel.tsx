@@ -71,11 +71,6 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   const feed = snap ? feedRows(snap) : []
   const paused = snap ? pausedCards(snap, now) : []
   const selfHost = snap?.cards.find(c => c.sid === snap.self)?.hostId
-  const canJump = (hostId?: string): hostId is string => !!hostId && hostId !== selfHost
-
-  const openButton = (key: string, hostId?: string) =>
-    canJump(hostId) ? <Button key={key} plain dimColor hover={{ color: 'claude', dimColor: false }} label={tx('jump')} onPress={() => act.jump(hostId)} /> : null
-
   const header = (label: string, count: number, accent: boolean) => (
     <Text size="heading" weight="semibold">
       {label} <Text weight="regular" color={accent && count > 0 ? 'claude' : 'subtle'}>{count}</Text>
@@ -99,7 +94,9 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
               · {tx(KIND_KEY[task.kind])} · {ago(lang, task.createdAt, now, true)}
             </Text>
           </Text>
-          {openButton(`jump-${key}`, task.hostId)}
+          {task.hostId && task.hostId !== selfHost ? (
+            <Button key={`jump-${key}`} plain dimColor hover={{ color: 'claude', dimColor: false }} label={tx('jump')} onPress={() => act.jump(task.hostId!)} />
+          ) : null}
         </Box>
         <Text weight="semibold">{task.title}</Text>
         {task.detail ? <Text size="footnote" dimColor>{clip(task.detail, inner, 2)}</Text> : null}
@@ -123,8 +120,9 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     )
   }
 
-  // One row per message, newest first, each naming the project it came from. The terminal boxes
-  // each one; the desktop lists them bare, as its own session list does.
+  // One row per message, newest first, each naming the project it came from. No Open: a message
+  // asks nothing of its session. Actions sit at the bottom trailing edge, where a task's do.
+  // The terminal boxes each one; the desktop lists them bare, as its own session list does.
   const feedCard = (row: FeedRow) => (
     <Box key={`feed-${row.id}`} flexDirection="row" alignItems="flex-start" {...(native ? { paddingX: 'xs' as const } : { borderStyle: 'round', ...cardBorder, hover: { borderColor: 'claude' }, paddingX: 'sm' as const, paddingY: 'sm' as const })}>
       {row.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>}
@@ -139,7 +137,6 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
           <Box flexDirection="row" gap="md">
             <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
             <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />
-            {openButton(`fjump-${row.id}`, row.hostId)}
           </Box>
         </Box>
       </Box>
