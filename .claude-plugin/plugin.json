@@ -1,0 +1,8 @@
+{
+  "name": "agent-hub",
+  "version": "0.1.0",
+  "description": "One panel for every Claude Code session on this machine: what each agent needs from you, and what each one got done.",
+  "author": { "name": "Sma1lboy", "url": "https://github.com/Sma1lboy" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
