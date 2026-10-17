@@ -321,10 +321,10 @@ test('settings: language, auto-open and divider sync through the store', async (
   expect(calls.opened).toContain('agent-hub-settings')
 
   const settings = await $.ui.mount(pane('terminal', 'agent-hub-settings'))
-  await settings.select({ key: 'lang', value: 'zh' })
+  await settings.press({ key: 'lang-zh' })
   expect(store.get('settings')).toEqual({ lang: 'zh', autoOpen: true, divider: false, taskRows: 12 })
   expect(await settings.find({ type: 'Text', text: '语言' })).toBeDefined()
-  await settings.press({ key: 'toggle-autoOpen' })
+  await settings.press({ key: 'toggle-autoOpen-off' })
   expect(((store.get('settings')) as { autoOpen: boolean }).autoOpen).toBe(false)
 
   // A task arriving from another session does not open the panel now.

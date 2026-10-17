@@ -24,6 +24,11 @@ export type Actions = {
 
 type PaneInput = RenderInput<'Pane'>
 
+const LANGS = [
+  ['en', 'English'],
+  ['zh', '中文'],
+] as const
+
 const KIND_KEY: Record<OpenTask['kind'], CopyKey> = { do: 'kindDo', answer: 'kindAnswer', choose: 'kindChoose' }
 
 /** Cuts text to about `lines` lines of `columns`, so one long detail cannot stretch a card. */
@@ -47,6 +52,11 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   const now = await $.clock.now()
   const { lang } = settings
   const tx = (key: CopyKey, vars?: Record<string, string | number>) => t(lang, key, vars)
+
+  // The desktop draws its own controls and borders: leave their colours to it. The terminal
+  // gets the theme's subtle grey so cards do not shout.
+  const native = e.surface !== 'terminal'
+  const cardBorder = native ? {} : { borderColor: 'subtle' as const }
 
   // Inside a card: the pane's width less the border and padding.
   const inner = Math.max(20, (e.props.bodyColumns || e.viewport?.columns || 60) - 4)
@@ -72,7 +82,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     const options = task.options ?? []
     const optionsInRow = wide && options.join('    ').length + 8 < inner
     return (
-      <Box key={`task-${key}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
+      <Box key={`task-${key}`} flexDirection="column" borderStyle="round" {...cardBorder} hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
           <Text>
             <Text weight="bold">{task.name}</Text>
@@ -87,7 +97,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
         {task.detail ? <Text dimColor>{clip(task.detail, inner, 2)}</Text> : null}
         {task.kind === 'do' ? (
           <Box flexDirection="row" marginTop="xs">
-            <Button key={`done-${key}`} variant="secondary" label={tx('done')} onPress={() => act.complete(task)} />
+            <Button key={`done-${key}`} variant="primary" label={tx('done')} onPress={() => act.complete(task)} />
           </Box>
         ) : task.kind === 'choose' ? (
           <Box flexDirection={optionsInRow ? 'row' : 'column'} gap={optionsInRow ? 1 : 0} marginTop="xs">
@@ -107,7 +117,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
 
   // One card per message, newest first, each naming the project it came from.
   const feedCard = (row: FeedRow) => (
-    <Box key={`feed-${row.id}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
+    <Box key={`feed-${row.id}`} flexDirection="column" borderStyle="round" {...cardBorder} hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
       <Box flexDirection="row">
         {row.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>}
         <Box flexShrink={1}>
@@ -119,7 +129,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
           <Text weight="semibold">{row.name}</Text>
           <Text dimColor> · {ago(lang, row.at, now, true)}</Text>
         </Text>
-        <Box flexDirection="row" gap="md">
+        <Box flexDirection="row" gap="md" {...(native ? { display: 'none' as const, hover: { display: 'flex' as const } } : {})}>
           <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
           <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />
           {openButton(`fjump-${row.id}`, row.hostId)}
@@ -170,26 +180,26 @@ function divider($: EngineInterface, e: PaneInput, rows: number) {
 }
 
 export async function renderSettings($: EngineInterface, e: PaneInput, act: Actions): Promise<RenderElement> {
-  const { Box, Text, Button, Select } = $.ui.resolve(e as PaneInput & { surface: 'terminal' })
+  const { Box, Text, Button } = $.ui.resolve(e)
   const settings = (await read($, settingsAtom)) ?? DEFAULT_SETTINGS
   const tx = (key: CopyKey) => t(settings.lang, key)
   const toggle = (key: 'autoOpen' | 'divider') => (
-    <Button key={`toggle-${key}`} variant="secondary" label={settings[key] ? tx('on') : tx('off')} onPress={() => act.setSettings({ [key]: !settings[key] })} />
+    <Box flexDirection="row" gap="sm">
+      {([true, false] as const).map(on => (
+        <Button key={`toggle-${key}-${on ? 'on' : 'off'}`} variant={settings[key] === on ? 'primary' : 'secondary'} label={on ? tx('on') : tx('off')} onPress={() => act.setSettings({ [key]: on })} />
+      ))}
+    </Box>
   )
 
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="row" gap={2} alignItems="center">
         <Text>{tx('language')}</Text>
-        <Select
-          key="lang"
-          value={settings.lang}
-          options={[
-            { value: 'en', label: 'English' },
-            { value: 'zh', label: '中文' },
-          ]}
-          onSelect={value => act.setSettings({ lang: value === 'zh' ? 'zh' : 'en' })}
-        />
+        <Box flexDirection="row" gap="sm">
+          {LANGS.map(([value, label]) => (
+            <Button key={`lang-${value}`} variant={settings.lang === value ? 'primary' : 'secondary'} label={label} onPress={() => act.setSettings({ lang: value })} />
+          ))}
+        </Box>
       </Box>
       <Box flexDirection="row" gap={2} alignItems="center">
         <Text>{tx('autoOpen')}</Text>
