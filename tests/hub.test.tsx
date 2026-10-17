@@ -402,9 +402,8 @@ test('Jump opens the desktop session; terminal sessions and this session show no
   // A task this session handed out is already here: nothing to jump to.
   await assign($, { kind: 'do', title: 'Rotate the deploy key' })
   const id = ((store.get(cardKey('self'))) as Card).tasks[0]!.id
-  const mine = await $.ui.mount(pane('desktop'))
-  expect(await mine.find({ type: 'Text', text: 'Rotate the deploy key' })).toBeDefined()
-  expect(await mine.find({ key: `jump-self:${id}` })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: 'Rotate the deploy key' })).toBeDefined()
+  expect(await ui.find({ key: `jump-self:${id}` })).toBeUndefined()
 })
 
 test('the divider, when on, drags the task area taller', async ($, on) => {
