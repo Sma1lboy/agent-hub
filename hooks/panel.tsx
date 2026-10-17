@@ -103,7 +103,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
         {task.detail ? <Text dimColor>{clip(task.detail, inner, 2)}</Text> : null}
         {task.kind === 'do' ? (
           <Box flexDirection="row" marginTop="xs">
-            <Button key={`done-${key}`} variant="primary" label={tx('done')} onPress={() => act.complete(task)} />
+            <Button key={`done-${key}`} variant="secondary" label={tx('done')} onPress={() => act.complete(task)} />
           </Box>
         ) : task.kind === 'choose' ? (
           <Box flexDirection={optionsInRow ? 'row' : 'column'} flexWrap="wrap" gap="sm" marginTop="xs">
@@ -123,22 +123,20 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
 
   // One card per message, newest first, each naming the project it came from.
   const feedCard = (row: FeedRow) => (
-    <Box key={`feed-${row.id}`} flexDirection="column" borderStyle="round" {...cardBorder} hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
-      <Box flexDirection="row">
-        {row.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>}
-        <Box flexShrink={1}>
-          <Text>{row.text}</Text>
-        </Box>
-      </Box>
-      <Box flexDirection="row" justifyContent="space-between" flexWrap="wrap" columnGap="md">
-        <Text>
-          <Text weight="semibold">{row.name}</Text>
-          <Text dimColor> · {ago(lang, row.at, now, true)}</Text>
-        </Text>
-        <Box flexDirection="row" gap="md" {...(native ? { display: 'none' as const, hover: { display: 'flex' as const } } : {})}>
-          <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
-          <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />
-          {openButton(`fjump-${row.id}`, row.hostId)}
+    <Box key={`feed-${row.id}`} flexDirection="row" alignItems="flex-start" borderStyle="round" {...cardBorder} hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm">
+      {row.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>}
+      <Box flexDirection="column" flexShrink={1} flexGrow={1} rowGap="xs">
+        <Text>{row.text}</Text>
+        <Box flexDirection="row" justifyContent="space-between" flexWrap="wrap" columnGap="md">
+          <Text>
+            <Text weight="semibold">{row.name}</Text>
+            <Text dimColor> · {ago(lang, row.at, now, true)}</Text>
+          </Text>
+          <Box flexDirection="row" gap="md" {...(native ? { display: 'none' as const, hover: { display: 'flex' as const } } : {})}>
+            <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
+            <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />
+            {openButton(`fjump-${row.id}`, row.hostId)}
+          </Box>
         </Box>
       </Box>
     </Box>
