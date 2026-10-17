@@ -64,6 +64,7 @@ const rt = {
   summaryDue: false,
   summarizing: false,
   lastPrune: 0,
+  seenSessions: '',
   writes: Promise.resolve() as Promise<unknown>,
 }
 
@@ -150,6 +151,11 @@ async function poll($: EngineInterface) {
 
   const settings = readSettings(entries[SETTINGS_KEY])
   const snap = snapshotOf(entries, rt.sid)
+  const seen = snap.cards.map(c => c.sid).sort().join(',')
+  if (seen !== rt.seenSessions) {
+    rt.seenSessions = seen
+    $.ui.log(`agent-hub: sessions in the store: ${seen}`, { to: 'debug' })
+  }
   if (JSON.stringify(await read($, settingsAtom)) !== JSON.stringify(settings)) await update($, settingsAtom, () => settings)
   if (JSON.stringify(await read($, snapAtom)) !== JSON.stringify(snap)) await update($, snapAtom, () => snap)
 
