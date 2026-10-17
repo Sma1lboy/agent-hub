@@ -36,7 +36,7 @@ if (!process.argv.includes('--clear')) {
     feed,
   })
 
-  // After the author's own open-source projects, for screenshots. Each update is an outcome, never a commit.
+  // After the author's own projects, for screenshots; each session writes in its own language. Each update is an outcome, never a commit.
   const cards = [
     card(
       'demo-rove',
@@ -59,10 +59,10 @@ if (!process.argv.includes('--clear')) {
     card(
       'demo-wisp',
       'wisp',
-      [task('t1', 'answer', 'How many cards per WeChat group per day, at most?', 15, { detail: 'There is no cap today; one group got 23 yesterday. A number is enough.' })],
+      [task('t1', 'answer', '微信群每天最多推几张卡片？', 15, { detail: '现在没有上限，昨天一个群收了 23 张。给我一个数字就行。' })],
       [
-        item('demo-wisp', 'f1', 'milestone', 'Memory conflicts now always defer to the repo', 20),
-        item('demo-wisp', 'f2', 'milestone', 'The WeChat agent moved to its own repository', 75),
+        item('demo-wisp', 'f1', 'milestone', '记忆和仓库冲突时，一律以仓库为准', 20),
+        item('demo-wisp', 'f2', 'milestone', '微信 agent 拆成了独立仓库', 75),
       ],
     ),
     card(
@@ -74,8 +74,8 @@ if (!process.argv.includes('--clear')) {
     card(
       'demo-mcrpg',
       'mc-rpg',
-      [task('t1', 'choose', 'How should NPC dialogue start?', 1, { options: ['Right-click', 'Walk up to them', 'Both'] })],
-      [item('demo-mcrpg', 'f1', 'milestone', 'NPCs now find their way along village streets', 28)],
+      [task('t1', 'choose', '幽井 NPC 的对话用哪种方式触发？', 1, { options: ['右键交互', '靠近自动触发', '两种都要'] })],
+      [item('demo-mcrpg', 'f1', 'milestone', 'NPC 能沿着村庄街道寻路了', 28)],
     ),
   ]
   for (const c of cards) store[`card:${c.sid}`] = c
