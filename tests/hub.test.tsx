@@ -384,7 +384,7 @@ test('after a compact the model is told which tasks are still open', async ($, o
   expect(rows.some(r => r.includes('What should the bucket be called?'))).toBe(true)
 })
 
-test('Jump opens the desktop session; terminal sessions show no jump', async ($, on) => {
+test('Jump opens the desktop session; terminal sessions and this session show no jump', async ($, on) => {
   const { calls, store } = stub(on, {
     host: 'local_self',
     entries: { [cardKey('other')]: otherCard(), [cardKey('term')]: otherCard({ sid: 'term', hostId: undefined, tasks: [{ id: 't9', kind: 'do', title: 'Plug in the YubiKey', createdAt: NOW }] }) },
@@ -394,6 +394,13 @@ test('Jump opens the desktop session; terminal sessions show no jump', async ($,
   await ui.press({ key: 'jump-other:t1' })
   expect(calls.run).toEqual([['open', 'claude://claude.ai/epitaxy/local_other']])
   expect(await ui.find({ key: 'jump-term:t9' })).toBeUndefined()
+
+  // A task this session handed out is already here: nothing to jump to.
+  await assign($, { kind: 'do', title: 'Rotate the deploy key' })
+  const id = ((store.get(cardKey('self'))) as Card).tasks[0]!.id
+  const mine = await $.ui.mount(pane('desktop'))
+  expect(await mine.find({ type: 'Text', text: 'Rotate the deploy key' })).toBeDefined()
+  expect(await mine.find({ key: `jump-self:${id}` })).toBeUndefined()
 })
 
 test('the divider, when on, drags the task area taller', async ($, on) => {

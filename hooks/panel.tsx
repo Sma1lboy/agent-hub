@@ -87,6 +87,8 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     const options = task.options ?? []
     // The desktop wraps a row of its own buttons; the terminal stacks them when they do not fit.
     const optionsInRow = native || (wide && options.join('    ').length + 8 < inner)
+    // The desktop puts a card's actions at its trailing edge, as its own cards do; the terminal keeps them left.
+    const actionsAlign = native ? ('flex-end' as const) : ('flex-start' as const)
     return (
       <Box key={`task-${key}`} flexDirection="column" borderStyle="round" {...cardBorder} hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
@@ -102,17 +104,17 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
         <Text weight="semibold">{task.title}</Text>
         {task.detail ? <Text size="footnote" dimColor>{clip(task.detail, inner, 2)}</Text> : null}
         {task.kind === 'do' ? (
-          <Box flexDirection="row" marginTop="xs">
+          <Box flexDirection="row" justifyContent={actionsAlign} marginTop="xs">
             <Button key={`done-${key}`} variant="secondary" label={tx('done')} onPress={() => act.complete(task)} />
           </Box>
         ) : task.kind === 'choose' ? (
-          <Box flexDirection={optionsInRow ? 'row' : 'column'} flexWrap="wrap" gap="sm" marginTop="xs">
+          <Box flexDirection={optionsInRow ? 'row' : 'column'} flexWrap="wrap" justifyContent={actionsAlign} gap="sm" marginTop="xs">
             {options.map((option, i) => (
               <Button key={`opt-${key}-${i}`} variant="secondary" label={option} onPress={() => act.choose(task, option)} />
             ))}
           </Box>
         ) : Input ? (
-          <Box marginTop="xs" flexDirection="row" flexGrow={1}>
+          <Box marginTop="xs" flexDirection="row" justifyContent={actionsAlign} flexGrow={1}>
             <Input key={`ans-${key}`} placeholder={tx('answerPlaceholder')} submitLabel={tx('send')} onSubmit={(value: string) => (value.trim() ? act.answer(task, value) : undefined)} />
           </Box>
         ) : null}
@@ -133,7 +135,8 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
             <Text weight="medium">{row.name}</Text>
             <Text dimColor> · {ago(lang, row.at, now, true)}</Text>
           </Text>
-          <Box flexDirection="row" gap="md" {...(native ? { display: 'none' as const, hover: { display: 'flex' as const } } : {})}>
+          {/* Always drawn, dim at rest: no surface animates a reveal, and a row's actions popping in reads as a glitch. */}
+          <Box flexDirection="row" gap="md">
             <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
             <Button key={`mute-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('noMore')} onPress={() => act.mute(row)} />
             {openButton(`fjump-${row.id}`, row.hostId)}
