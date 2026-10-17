@@ -36,40 +36,37 @@ if (!process.argv.includes('--clear')) {
     feed,
   })
 
-  // After the author's own projects, for screenshots; each session writes in its own language. Each update is an outcome, never a commit.
+  // 中文样例，参照作者自己的几个项目，用于截图分享。每条进展是一个成果，不是一次提交。
   const cards = [
     card(
       'demo-rove',
       'rove',
-      [task('t1', 'choose', 'Ship 0.10 to Homebrew or npm first?', 2, { options: ['Homebrew', 'npm', 'Both'] })],
+      [task('t1', 'choose', '0.10 先发 Homebrew 还是 npm？', 2, { options: ['Homebrew', 'npm', '两个一起'] })],
       [
-        item('demo-rove', 'f1', 'authorized', 'Released 0.9.232 (CLAUDE.md: may release when tests are green)', 4),
-        item('demo-rove', 'f2', 'milestone', 'rove api no longer reports a dead engine as healthy', 35),
+        item('demo-rove', 'f1', 'authorized', '发布了 0.9.232（CLAUDE.md：测试全绿可直接发版）', 4),
+        item('demo-rove', 'f2', 'milestone', 'rove api 不会再把挂掉的 engine 报成健康', 35),
       ],
     ),
     card(
       'demo-codefox',
       'codefox',
-      [task('t1', 'do', 'Set ANTHROPIC_API_KEY on Vercel', 9, { detail: 'The remote-agent preview needs it and returns 401 without it. Press Done and I will redeploy.' })],
+      [task('t1', 'do', '在 Vercel 上配好 ANTHROPIC_API_KEY', 9, { detail: '远端 agent 的预览环境要用，没有它会直接返回 401。配好后点完成，我重新部署。' })],
       [
-        item('demo-codefox', 'f1', 'milestone', 'Local agents can now drive remote projects', 12),
-        item('demo-codefox', 'f2', 'authorized', 'Merged PR #215, the demo video and new README (memory: may merge once CI is green)', 50),
+        item('demo-codefox', 'f1', 'milestone', '本地 agent 可以直接操作远端项目了', 12),
+        item('demo-codefox', 'f2', 'authorized', '合并了 PR #215：演示视频和新 README（memory：CI 绿了可直接合并）', 50),
       ],
     ),
     card(
-      'demo-wisp',
-      'wisp',
-      [task('t1', 'answer', '微信群每天最多推几张卡片？', 15, { detail: '现在没有上限，昨天一个群收了 23 张。给我一个数字就行。' })],
-      [
-        item('demo-wisp', 'f1', 'milestone', '记忆和仓库冲突时，一律以仓库为准', 20),
-        item('demo-wisp', 'f2', 'milestone', '微信 agent 拆成了独立仓库', 75),
-      ],
+      'demo-site',
+      'sma1lboy.me',
+      [task('t1', 'choose', 'Agent Hub 的仓库公开还是私有？', 4, { options: ['公开', '私有'] })],
+      [item('demo-site', 'f1', 'milestone', '首页改版成 PHANTOM 风格，已经上线', 70)],
     ),
     card(
       'demo-fitting',
       'fitting-room',
-      [task('t1', 'do', 'Put the Decart API key in ~/.env', 6, { detail: 'Live try-on runs on Decart Lucy VTON; the end-to-end test cannot run without it.' })],
-      [item('demo-fitting', 'f1', 'milestone', 'Outfit try-on works end to end', 3)],
+      [task('t1', 'do', '把 Decart API key 放进 ~/.env', 6, { detail: '实时试衣用的是 Decart 的 Lucy VTON 模型，没有 key 跑不了端到端测试。' })],
+      [item('demo-fitting', 'f1', 'milestone', '换装试穿全链路跑通了', 3)],
     ),
     card(
       'demo-mcrpg',

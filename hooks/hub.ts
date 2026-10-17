@@ -19,12 +19,12 @@ export const ackKey = (id: string) => `ack:${id}`
 export const muteKey = (id: string) => `mute:${id}`
 export const SETTINGS_KEY = 'settings'
 
-export const DEFAULT_SETTINGS: HubSettings = { lang: 'en', autoOpen: true, divider: false, muteButton: false, taskRows: 12 }
+export const DEFAULT_SETTINGS: HubSettings = { lang: 'zh', autoOpen: true, divider: false, muteButton: false, taskRows: 12 }
 
 export function readSettings(value: unknown): HubSettings {
   const v = (value ?? {}) as Partial<HubSettings>
   return {
-    lang: v.lang === 'zh' ? 'zh' : 'en',
+    lang: v.lang === 'en' ? 'en' : 'zh',
     autoOpen: v.autoOpen !== false,
     divider: v.divider === true,
     muteButton: v.muteButton === true,

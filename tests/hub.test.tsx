@@ -32,7 +32,8 @@ function stub(on: On, opts: Opts = {}) {
   const calls: Calls = { submitted: [], opened: [], status: [], run: [], models: [], prompts: [], tools: [], commands: [] }
   const clock = mock.clock(on, { now: NOW })
   // The shared store, as a map the test can read and other "sessions" can write.
-  const store = new Map<string, unknown>(Object.entries(opts.entries ?? {}))
+  // Tests read the English copy; the settings test switches to Chinese itself.
+  const store = new Map<string, unknown>(Object.entries({ settings: { lang: 'en' }, ...opts.entries }))
   on('store.get', ($, e) => ({ value: structuredClone(store.get(e.key)) }))
   on('store.set', ($, e) => {
     store.set(e.key, structuredClone(e.value))
