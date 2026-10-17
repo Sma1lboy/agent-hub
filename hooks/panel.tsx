@@ -31,8 +31,12 @@ const CHIP_COLOR: Record<Chip, Color> = { working: 'claude', idle: 'subtle', don
 
 /** Cuts text to about `lines` lines of `columns`, so one long detail cannot stretch a card. */
 const clip = (text: string, columns: number, lines: number) => {
-  const room = Math.max(24, columns * lines)
-  return text.length > room ? `${text.slice(0, room - 1).trimEnd()}…` : text
+  // Wrapped lines lose a few cells at their ends, so leave some slack; cut at a word where there is one.
+  const room = Math.max(24, columns * lines - lines * 4)
+  if (text.length <= room) return text
+  const cut = text.slice(0, room - 1)
+  const space = cut.lastIndexOf(' ')
+  return `${(space > room * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`
 }
 
 export async function renderHub($: EngineInterface, e: PaneInput, act: Actions): Promise<RenderElement> {
@@ -63,7 +67,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
 
   const header = (label: string, count: number, accent: boolean) => (
     <Text>
-      <Text weight="bold">{label}</Text> <Text color={accent && count > 0 ? 'claude' : 'subtle'}>{count}</Text>
+      <Text weight="bold" size="heading">{label}</Text> <Text color={accent && count > 0 ? 'claude' : 'subtle'}>{count}</Text>
     </Text>
   )
 
@@ -72,7 +76,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     const options = task.options ?? []
     const optionsInRow = wide && options.join('    ').length + 8 < inner
     return (
-      <Box key={`task-${key}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX={1}>
+      <Box key={`task-${key}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
           <Text>
             <Text weight="bold">{task.name}</Text>
@@ -86,17 +90,17 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
         <Text weight="semibold">{task.title}</Text>
         {task.detail ? <Text dimColor>{clip(task.detail, inner, 2)}</Text> : null}
         {task.kind === 'do' ? (
-          <Box flexDirection="row" marginTop={1}>
+          <Box flexDirection="row" marginTop="xs">
             <Button key={`done-${key}`} variant="secondary" label={tx('done')} onPress={() => act.complete(task)} />
           </Box>
         ) : task.kind === 'choose' ? (
-          <Box flexDirection={optionsInRow ? 'row' : 'column'} gap={optionsInRow ? 1 : 0} marginTop={1}>
+          <Box flexDirection={optionsInRow ? 'row' : 'column'} gap={optionsInRow ? 1 : 0} marginTop="xs">
             {options.map((option, i) => (
               <Button key={`opt-${key}-${i}`} variant="secondary" label={option} onPress={() => act.choose(task, option)} />
             ))}
           </Box>
         ) : Input ? (
-          <Box marginTop={1}>
+          <Box marginTop="xs">
             <Input key={`ans-${key}`} placeholder={tx('answerPlaceholder')} submitLabel={tx('send')} onSubmit={(value: string) => (value.trim() ? act.answer(task, value) : undefined)} />
           </Box>
         ) : null}
@@ -119,7 +123,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
         <Box flexShrink={1}>
           <Text>{item.text}</Text>
         </Box>
-        <Box display="none" hover={{ display: 'flex' }} position="absolute" right={0} top={0} gap={2} paddingX={1} backgroundColor="inverseText">
+        <Box display="none" hover={{ display: 'flex' }} position="absolute" right={0} top={0} gap="md" paddingX="sm" backgroundColor="inverseText">
           {itemActions(row)}
         </Box>
       </Box>
@@ -142,7 +146,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     const { card } = view
     const summary = card.summary
     return (
-      <Box key={`sess-${card.sid}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX={1}>
+      <Box key={`sess-${card.sid}`} flexDirection="column" borderStyle="round" borderColor="subtle" hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
           <Text weight="bold">{card.name}</Text>
           <Box flexDirection="row" gap={2}>
@@ -152,7 +156,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
         </Box>
         {summary?.goal ? <Text weight="semibold">{clip(summary.goal, inner, 2)}</Text> : null}
         {view.items.length ? (
-          <Box flexDirection="column">
+          <Box flexDirection="column" rowGap="xs" paddingY="xs">
             {view.items.map(item => itemRow(view, item))}
           </Box>
         ) : null}
@@ -164,14 +168,14 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   }
 
   const taskList = (
-    <Box flexDirection="column">
+    <Box flexDirection="column" rowGap="sm">
       {tasks.length === 0 ? <Text dimColor>{tx('nothingWaiting')}</Text> : tasks.map(taskCard)}
     </Box>
   )
 
   return (
-    <Box flexDirection="column" gap={1}>
-      <Box flexDirection="column">
+    <Box flexDirection="column" gap="md">
+      <Box flexDirection="column" rowGap="sm">
         {header(tx('needsYou'), tasks.length, true)}
         {settings.divider ? (
           <Box flexDirection="column" height={settings.taskRows} overflow="hidden">
@@ -182,9 +186,11 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
         )}
       </Box>
       {settings.divider ? divider($, e, settings.taskRows) : null}
-      <Box flexDirection="column">
+      <Box flexDirection="column" rowGap="sm">
         {header(tx('updates'), sessions.length, false)}
-        {sessions.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : sessions.map(sessionCard)}
+        <Box flexDirection="column" rowGap="sm">
+          {sessions.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : sessions.map(sessionCard)}
+        </Box>
       </Box>
     </Box>
   )
