@@ -114,7 +114,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
             ))}
           </Box>
         ) : Input ? (
-          <Box marginTop="xs" flexDirection="row" justifyContent={actionsAlign} flexGrow={1}>
+          <Box marginTop="xs" flexDirection="row" justifyContent={actionsAlign}>
             <Input key={`ans-${key}`} placeholder={tx('answerPlaceholder')} submitLabel={tx('send')} onSubmit={(value: string) => (value.trim() ? act.answer(task, value) : undefined)} />
           </Box>
         ) : null}
