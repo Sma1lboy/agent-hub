@@ -77,8 +77,8 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     canJump(hostId) ? <Button key={key} plain dimColor hover={{ color: 'claude', dimColor: false }} label={tx('jump')} onPress={() => act.jump(hostId)} /> : null
 
   const header = (label: string, count: number, accent: boolean) => (
-    <Text>
-      <Text weight="bold" size="heading">{label}</Text> <Text color={accent && count > 0 ? 'claude' : 'subtle'}>{count}</Text>
+    <Text size="heading" weight="semibold">
+      {label} <Text weight="regular" color={accent && count > 0 ? 'claude' : 'subtle'}>{count}</Text>
     </Text>
   )
 
@@ -90,8 +90,8 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     return (
       <Box key={`task-${key}`} flexDirection="column" borderStyle="round" {...cardBorder} hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
-          <Text>
-            <Text weight="bold">{task.name}</Text>
+          <Text size="footnote">
+            <Text weight="medium">{task.name}</Text>
             <Text dimColor>
               {' '}
               · {tx(KIND_KEY[task.kind])} · {ago(lang, task.createdAt, now, true)}
@@ -100,7 +100,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
           {openButton(`jump-${key}`, task.hostId)}
         </Box>
         <Text weight="semibold">{task.title}</Text>
-        {task.detail ? <Text dimColor>{clip(task.detail, inner, 2)}</Text> : null}
+        {task.detail ? <Text size="footnote" dimColor>{clip(task.detail, inner, 2)}</Text> : null}
         {task.kind === 'do' ? (
           <Box flexDirection="row" marginTop="xs">
             <Button key={`done-${key}`} variant="secondary" label={tx('done')} onPress={() => act.complete(task)} />
@@ -121,15 +121,16 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     )
   }
 
-  // One card per message, newest first, each naming the project it came from.
+  // One row per message, newest first, each naming the project it came from. The terminal boxes
+  // each one; the desktop lists them bare, as its own session list does.
   const feedCard = (row: FeedRow) => (
-    <Box key={`feed-${row.id}`} flexDirection="row" alignItems="flex-start" borderStyle="round" {...cardBorder} hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm">
+    <Box key={`feed-${row.id}`} flexDirection="row" alignItems="flex-start" {...(native ? { paddingX: 'xs' as const } : { borderStyle: 'round', ...cardBorder, hover: { borderColor: 'claude' }, paddingX: 'sm' as const, paddingY: 'sm' as const })}>
       {row.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>}
       <Box flexDirection="column" flexShrink={1} flexGrow={1} rowGap="xs">
         <Text>{row.text}</Text>
         <Box flexDirection="row" justifyContent="space-between" flexWrap="wrap" columnGap="md">
-          <Text>
-            <Text weight="semibold">{row.name}</Text>
+          <Text size="footnote">
+            <Text weight="medium">{row.name}</Text>
             <Text dimColor> · {ago(lang, row.at, now, true)}</Text>
           </Text>
           <Box flexDirection="row" gap="md" {...(native ? { display: 'none' as const, hover: { display: 'flex' as const } } : {})}>
@@ -180,7 +181,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
             {card.name}: {tx('paused', { reason: card.paused ?? '' })}
           </Text>
         ))}
-        <Box flexDirection="column" rowGap="sm">
+        <Box flexDirection="column" rowGap={native ? 'md' : 'sm'}>
           {feed.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : feed.map(feedCard)}
         </Box>
       </Box>
