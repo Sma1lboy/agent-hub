@@ -1,6 +1,6 @@
 // Evals against real models. `bun evals/run.ts [summary|assign|all]`
 //
-//   summary  8 cases on Haiku: does the progress summary keep only coarse,
+//   summary  10 cases on Haiku: does the progress summary keep only coarse,
 //            finished milestones, catch unasked work done under a standing
 //            permission, keep old lines verbatim, and respect mutes?
 //   assign   5 cases on Opus, each in a throwaway git sandbox with the mod
@@ -116,6 +116,29 @@ const SUMMARY_CASES: SummaryCase[] = [
       { role: 'assistant', text: 'Split payment.ts into three files. 6 tests fail now; fixing the imports next.', toolUses: tools('Read', 'Write', 'Write', 'Bash') },
     ],
     check: s => (s.milestones.length === 0 ? null : `expected no milestones, got ${JSON.stringify(s.milestones)}`),
+  },
+  {
+    name: 'commits and fix-ups toward one goal fold into one short line',
+    rows: [
+      { role: 'user', text: '让试衣页在手机上也能用，局域网里能打开。' },
+      { role: 'assistant', text: 'Committed 79350dc: LAN HTTPS dev server (npm run dev:lan), three-column layout, drag-and-drop bulk import.', toolUses: tools('Edit', 'Write', 'Bash') },
+      { role: 'assistant', text: 'Committed a1b2c3d: fix the camera permission prompt on iOS Safari; checked desktop and phone layouts in the browser.', toolUses: tools('Edit', 'Bash') },
+      { role: 'assistant', text: 'Committed 9f8e7d6: tighten spacing on small screens. Mobile try-on now works over the LAN.', toolUses: tools('Edit', 'Bash') },
+    ],
+    check: s => {
+      const bad = s.milestones.filter(m => /\b[0-9a-f]{7,}\b|npm |dev:lan|\.tsx?\b/i.test(m))
+      if (s.milestones.length > 2) return `expected 1-2 milestones, got ${JSON.stringify(s.milestones)}`
+      if (bad.length) return `hashes, commands or files leaked into ${JSON.stringify(bad)}`
+      return s.milestones.length ? null : 'expected the mobile outcome as a milestone'
+    },
+  },
+  {
+    name: 'routine commits under a standing permission are not worth an authorized line',
+    rows: [
+      { role: 'user', text: 'Rename the helper and clean up the imports.' },
+      { role: 'assistant', text: 'Done. Your memory says to commit finished work without asking, so I committed it as 3c4d5e6.', toolUses: tools('Edit', 'Bash') },
+    ],
+    check: s => (s.authorized.length === 0 ? null : `expected no authorized items, got ${JSON.stringify(s.authorized)}`),
   },
   {
     name: 'a Chinese session gets Chinese lines',

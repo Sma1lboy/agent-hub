@@ -1,4 +1,4 @@
-// Fills the installed Agent Hub's store with three made-up sessions, for screenshots and demos.
+// Fills the installed Agent Hub's store with five made-up sessions, after the author's own projects, for screenshots and demos.
 //   bun scripts/demo.ts          seed (tasks stay visible for 2 hours)
 //   bun scripts/demo.ts --clear  remove everything the demo wrote
 // Every key it writes belongs to a session id starting with "demo-".
@@ -36,40 +36,50 @@ if (!process.argv.includes('--clear')) {
     feed,
   })
 
+  // After the author's own open-source projects, for screenshots. Each update is an outcome, never a commit.
   const cards = [
     card(
-      'demo-payments',
-      'payments-api',
+      'demo-rove',
+      'rove',
+      [task('t1', 'choose', 'Ship 0.10 to Homebrew or npm first?', 2, { options: ['Homebrew', 'npm', 'Both'] })],
       [
-        task('t1', 'do', 'Add STRIPE_SECRET_KEY to .env.local', 4, { detail: 'Use the test-mode secret key from dashboard.stripe.com → Developers → API keys. I will run the checkout tests once it is there.' }),
-        task('t2', 'choose', 'Retry failed webhooks how many times?', 1, { options: ['3 times', '5 times', 'Never, alert instead'] }),
-      ],
-      [
-        item('demo-payments', 'f1', 'milestone', 'Checkout flow works end to end against Stripe test mode; 31 tests pass', 18),
-        item('demo-payments', 'f2', 'authorized', 'Merged MR !128 "Idempotency keys on charges" (memory: may merge my own MRs once CI is green)', 26),
+        item('demo-rove', 'f1', 'authorized', 'Released 0.9.232 (CLAUDE.md: may release when tests are green)', 4),
+        item('demo-rove', 'f2', 'milestone', 'rove api no longer reports a dead engine as healthy', 35),
       ],
     ),
     card(
-      'demo-notes',
-      'notes-app',
-      [task('t1', 'answer', 'What should the S3 bucket for attachments be called?', 7, { detail: 'It has to be globally unique. I will create it with Terraform in us-east-1.' })],
+      'demo-codefox',
+      'codefox',
+      [task('t1', 'do', 'Set ANTHROPIC_API_KEY on Vercel', 9, { detail: 'The remote-agent preview needs it and returns 401 without it. Press Done and I will redeploy.' })],
       [
-        item('demo-notes', 'f1', 'milestone', 'Offline sync ships: edits made without network merge cleanly on reconnect', 42),
-        item('demo-notes', 'f2', 'milestone', 'Dark mode follows the system setting on every screen', 95),
+        item('demo-codefox', 'f1', 'milestone', 'Local agents can now drive remote projects', 12),
+        item('demo-codefox', 'f2', 'authorized', 'Merged PR #215, the demo video and new README (memory: may merge once CI is green)', 50),
       ],
     ),
     card(
-      'demo-ios',
-      'ios-client',
-      [task('t1', 'do', 'Approve build 2.4.0 (311) in App Store Connect', 12, { detail: 'TestFlight review passed. Only the account holder can submit it for release.' })],
+      'demo-wisp',
+      'wisp',
+      [task('t1', 'answer', 'How many cards per WeChat group per day, at most?', 15, { detail: 'There is no cap today; one group got 23 yesterday. A number is enough.' })],
       [
-        item('demo-ios', 'f1', 'authorized', 'Bumped the build number and pushed tag v2.4.0 (CLAUDE.md: may tag releases)', 15),
-        item('demo-ios', 'f2', 'milestone', 'Crash on launch for iOS 17 users fixed; repro test added', 63),
+        item('demo-wisp', 'f1', 'milestone', 'Memory conflicts now always defer to the repo', 20),
+        item('demo-wisp', 'f2', 'milestone', 'The WeChat agent moved to its own repository', 75),
       ],
+    ),
+    card(
+      'demo-fitting',
+      'fitting-room',
+      [task('t1', 'do', 'Put the Decart API key in ~/.env', 6, { detail: 'Live try-on runs on Decart Lucy VTON; the end-to-end test cannot run without it.' })],
+      [item('demo-fitting', 'f1', 'milestone', 'Outfit try-on works end to end', 3)],
+    ),
+    card(
+      'demo-mcrpg',
+      'mc-rpg',
+      [task('t1', 'choose', 'How should NPC dialogue start?', 1, { options: ['Right-click', 'Walk up to them', 'Both'] })],
+      [item('demo-mcrpg', 'f1', 'milestone', 'NPCs now find their way along village streets', 28)],
     ),
   ]
   for (const c of cards) store[`card:${c.sid}`] = c
 }
 
 writeFileSync(path, `${JSON.stringify(store, null, 2)}\n`)
-console.log(process.argv.includes('--clear') ? `Removed the demo from ${path}` : `Seeded 3 demo sessions into ${path}. Open /hub; they show within 3 seconds.`)
+console.log(process.argv.includes('--clear') ? `Removed the demo from ${path}` : `Seeded 5 demo sessions into ${path}. Open /hub; they show within 3 seconds.`)

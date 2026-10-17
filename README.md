@@ -22,7 +22,7 @@ To do 2
 
 Summary 3
 ╭─────────────────────────────────────╮
-│ ↳ Merged MR !128 (memory: may merge │
+│ ✓ Merged MR !128 (memory: may merge │
 │   my own MRs once CI is green)      │
 │ payments-api · 2m                   │
 │ OK                                  │
@@ -85,8 +85,7 @@ Guards:
 
 After each turn that used tools, Agent Hub asks Haiku to summarize that session's transcript, at most once every 5 minutes per session. If Haiku is unavailable it uses the session's own model. The new summary is compared with the previous one, and each new line becomes its own message in the stream, newest first, labelled with its project:
 
-- **✓ milestone**: something done and working. Reading code, answering a question, a plan or a half-finished step does not count.
-- **↳ done under a standing permission**: something Claude did without asking because your memory, CLAUDE.md, settings or an earlier general yes covered it, with the permission named.
+Every message is one outcome, marked ✓, at the level you would tell a teammate: "login works", not the commits and test runs behind it. Reading code, answering a question, a plan, a half-finished step or a commit never count. Consequential things Claude did without asking (a merge, a release, a deploy) because your memory, CLAUDE.md, settings or an earlier general yes covered it get a message too, with the permission named at the end.
 
 Messages stay after their session closes. **OK** hides a message in every session. **No more like this** (turn it on in `/hub-settings`) also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the Summary section says `<project>: Updates paused: <reason>`.
 
@@ -94,7 +93,7 @@ Messages stay after their session closes. **OK** hides a message in every sessio
 
 ### How Claude is told to use it
 
-The mod adds a section to the end of the system prompt: things only you can do go through `assign_task`, even if Claude also asked in its reply, and a missing secret is always a task. If you already gave a standing permission for that kind of action, Claude does it without asking and ends its reply with one line saying what it did and under which permission, which is what the ↳ messages pick up. The three tool descriptions carry the same rule and are loaded up front, so the model sees them every turn.
+The mod adds a section to the end of the system prompt: things only you can do go through `assign_task`, even if Claude also asked in its reply, and a missing secret is always a task. If you already gave a standing permission for that kind of action, Claude does it without asking and ends its reply with one line saying what it did and under which permission, which is what those messages pick up. The three tool descriptions carry the same rule and are loaded up front, so the model sees them every turn.
 
 Where an organization manages Claude Code, `prompt.compose` and `session.compact` hooks run only for plugins listed in managed settings. There the system-prompt section and the after-compact reminder are skipped, and the tool descriptions alone carry the rule.
 
@@ -144,7 +143,7 @@ bun evals/run.ts all
 
 Runs real models and appends to `evals/results.jsonl`, marking each case `fixed` or `REGRESSED` against its last run:
 
-- **summary**: 8 cases on Haiku (coarse milestones only, authorized work caught, approved-just-now is not authorized, old lines kept verbatim, mutes respected, Chinese sessions get Chinese lines). About $0.01 a run.
+- **summary**: 10 cases on Haiku (outcomes only, commits and fix-ups folded into one short line with no hashes or commands, consequential unasked work caught, routine commits and approved-just-now not counted, old lines kept verbatim, mutes respected, Chinese sessions get Chinese lines). About $0.01 a run.
 - **assign**: 5 cases on Opus, each in a fresh git sandbox (missing secret → do-task, plain edit → nothing, your decision → choose-task, standing permission → no task and the reply names it, sign-off → task). About $1.6 a run.
 
 Evals load the mod with `--plugin-dir`, which gets its own store, so test tasks never show up in your real panel.

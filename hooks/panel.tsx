@@ -128,7 +128,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   // The terminal boxes each one; the desktop lists them bare, as its own session list does.
   const feedCard = (row: FeedRow) => (
     <Box key={`feed-${row.id}`} flexDirection="row" alignItems="flex-start" {...(native ? { paddingX: 'xs' as const } : { borderStyle: 'round', ...cardBorder, hover: { borderColor: 'claude' }, paddingX: 'sm' as const, paddingY: 'sm' as const })}>
-      {row.kind === 'milestone' ? <Text color="success">✓ </Text> : <Text color="claude">↳ </Text>}
+      <Text color="success">✓ </Text>
       <Box flexDirection="column" flexShrink={1} flexGrow={1} rowGap="xs">
         <Text>{row.text}</Text>
         <Box flexDirection="row" justifyContent="space-between" flexWrap="wrap" columnGap="md">
