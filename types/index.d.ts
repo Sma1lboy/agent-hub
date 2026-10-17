@@ -62,6 +62,7 @@ declare module 'claude-code' {
       snap: Snapshot | null
       settings: HubSettings
       errors: Record<string, string>
+      showAllTasks: boolean
     }
   }
 }

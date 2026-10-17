@@ -1,4 +1,4 @@
-import { atom, read } from 'claude-code'
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { HubSettings } from '../types'
@@ -8,6 +8,10 @@ import type { CopyKey, FeedRow, OpenTask } from './hub'
 const snapAtom = atom({ plugin: 'agent-hub', key: 'snap' } as const, null)
 const settingsAtom = atom({ plugin: 'agent-hub', key: 'settings' } as const, DEFAULT_SETTINGS)
 const errorsAtom = atom({ plugin: 'agent-hub', key: 'errors' } as const, {})
+const showAllAtom = atom({ plugin: 'agent-hub', key: 'showAllTasks' } as const, false)
+
+// Tasks shown before "+N more", so the summary below stays in view.
+const TASKS_SHOWN = 3
 
 // The panel: tasks on top, the feed below. One tree for every surface;
 // Claude Code's theme keys only, with claude orange as the one accent.
@@ -49,6 +53,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   const snap = await read($, snapAtom)
   const settings = (await read($, settingsAtom)) ?? DEFAULT_SETTINGS
   const errors = (await read($, errorsAtom)) ?? {}
+  const showAll = (await read($, showAllAtom)) ?? false
   const now = await $.clock.now()
   const { lang } = settings
   const tx = (key: CopyKey, vars?: Record<string, string | number>) => t(lang, key, vars)
@@ -80,7 +85,8 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   const taskCard = (task: OpenTask) => {
     const key = `${task.sid}:${task.id}`
     const options = task.options ?? []
-    const optionsInRow = wide && options.join('    ').length + 8 < inner
+    // The desktop wraps a row of its own buttons; the terminal stacks them when they do not fit.
+    const optionsInRow = native || (wide && options.join('    ').length + 8 < inner)
     return (
       <Box key={`task-${key}`} flexDirection="column" borderStyle="round" {...cardBorder} hover={{ borderColor: 'claude' }} paddingX="sm" paddingY="sm" rowGap="xs">
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
@@ -100,13 +106,13 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
             <Button key={`done-${key}`} variant="primary" label={tx('done')} onPress={() => act.complete(task)} />
           </Box>
         ) : task.kind === 'choose' ? (
-          <Box flexDirection={optionsInRow ? 'row' : 'column'} gap={optionsInRow ? 1 : 0} marginTop="xs">
+          <Box flexDirection={optionsInRow ? 'row' : 'column'} flexWrap="wrap" gap="sm" marginTop="xs">
             {options.map((option, i) => (
               <Button key={`opt-${key}-${i}`} variant="secondary" label={option} onPress={() => act.choose(task, option)} />
             ))}
           </Box>
         ) : Input ? (
-          <Box marginTop="xs">
+          <Box marginTop="xs" flexDirection="row" flexGrow={1}>
             <Input key={`ans-${key}`} placeholder={tx('answerPlaceholder')} submitLabel={tx('send')} onSubmit={(value: string) => (value.trim() ? act.answer(task, value) : undefined)} />
           </Box>
         ) : null}
@@ -140,7 +146,19 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
 
   const taskList = (
     <Box flexDirection="column" rowGap="sm">
-      {tasks.length === 0 ? <Text dimColor>{tx('nothingWaiting')}</Text> : tasks.map(taskCard)}
+      {tasks.length === 0 ? <Text dimColor>{tx('nothingWaiting')}</Text> : (showAll ? tasks : tasks.slice(0, TASKS_SHOWN)).map(taskCard)}
+      {tasks.length > TASKS_SHOWN ? (
+        <Box flexDirection="row">
+          <Button
+            key="more-tasks"
+            plain
+            dimColor
+            hover={{ dimColor: false }}
+            label={showAll ? tx('fewerTasks') : tx('moreTasks', { n: tasks.length - TASKS_SHOWN })}
+            onPress={() => update($, showAllAtom, v => !v)}
+          />
+        </Box>
+      ) : null}
     </Box>
   )
 

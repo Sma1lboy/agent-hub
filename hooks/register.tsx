@@ -312,7 +312,7 @@ export const register: Register = on => {
       createdAt: now,
     }
     await mutateCard($, c => ({ ...c, tasks: [...c.tasks, task] }))
-    void poll($).catch(() => undefined)
+    await poll($).catch(() => undefined)
     return { result: `Assigned task ${task.id} to the user in Agent Hub. Do not wait or poll: carry on with work that does not need it, or end your turn. Their answer will arrive as a new message.` }
   })
 
@@ -322,7 +322,7 @@ export const register: Register = on => {
     const card = (await $.store.get(cardKey(rt.sid))) as Card
     if (!card.tasks.some(task => task.id === id)) return { deny: `No open task ${id}. Open: ${card.tasks.map(x => x.id).join(', ') || 'none'}.` }
     await mutateCard($, c => ({ ...c, tasks: c.tasks.filter(task => task.id !== id) }))
-    void poll($).catch(() => undefined)
+    await poll($).catch(() => undefined)
     return { result: `Withdrew task ${id}.` }
   })
 
