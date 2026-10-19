@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # README: needs Claude Code 2.1.299 or newer. Pinned so a run is reproducible.
+      - run: npm install -g @anthropic-ai/claude-code@2.1.302
+      - run: claude --version
+      # Unit tests on the engine's test host; no login or API key needed.
+      # evals/ calls real models and costs money, so CI never runs it.
+      - run: claude plugin test .
