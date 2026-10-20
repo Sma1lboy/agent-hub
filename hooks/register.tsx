@@ -21,6 +21,7 @@ import {
   openTasks,
   parseSummary,
   readSettings,
+  readSummary,
   replyKey,
   shortHash,
   snapshotOf,
@@ -93,7 +94,7 @@ async function doJoin($: EngineInterface) {
     heartbeat: now,
     tasks: old?.tasks ?? [],
     feed: old?.feed ?? [],
-    summary: old?.summary,
+    summary: readSummary(old?.summary),
     summaryAt: old?.summaryAt,
   }
   await $.store.set(cardKey(rt.sid), card)
@@ -203,7 +204,8 @@ async function deliver($: EngineInterface, replies: readonly (readonly [string, 
 
 async function summarize($: EngineInterface, card: Card, snap: Snapshot) {
   const rows = await $.session.messages()
-  const prompt = summaryPrompt(transcriptText(rows), card.summary, snap.mutes)
+  const prev = readSummary(card.summary)
+  const prompt = summaryPrompt(transcriptText(rows), prev, snap.mutes)
   const ask = (model: string) => $.model.complete({ model, prompt, maxTokens: 1500, effort: 'low', timeoutMs: 90_000 })
   let reply = await ask('haiku')
   if (!reply.isAnswered && reply.reason === 'api-error') reply = await ask(await $.session.model())
@@ -219,7 +221,7 @@ async function summarize($: EngineInterface, card: Card, snap: Snapshot) {
     await mutateCard($, c => ({ ...c, paused: 'the summary came back unreadable', summaryAt: now }))
     return
   }
-  const fresh = newItems(card.summary, summary)
+  const fresh = newItems(prev, summary)
   const item = (kind: FeedItem['kind'], text: string): FeedItem => ({ id: `${rt.sid}:${shortHash(kind + text + now)}`, kind, text, at: now })
   const added = [...fresh.milestones.map(s => item('milestone', s)), ...fresh.authorized.map(s => item('authorized', s))]
   await mutateCard($, c => ({ ...c, summary, summaryAt: now, paused: undefined, feed: [...c.feed, ...added].slice(-MAX_FEED) }))

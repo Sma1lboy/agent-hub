@@ -3,7 +3,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine, MountTarget } from 'claude-code/testing'
 
 import type { Card, Task } from '../types'
-import { DEFAULT_SETTINGS, readSettings, STALE_MS, cardKey, looksLikeSecret, newItems, replyKey, staleKeys } from '../hooks/hub'
+import { DEFAULT_SETTINGS, readSettings, STALE_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys } from '../hooks/hub'
 
 // Agent Hub end to end against the engine's own test host: one session ("self")
 // plus other sessions seeded straight into the shared store.
@@ -291,9 +291,9 @@ test('a turn with tools brings a summary; only new milestones become messages', 
   const ui = await $.ui.mount(pane('terminal'))
   // One message per card, newest first, each naming its project.
   expect(await ui.find({ type: 'Text', text: 'Login page works end to end' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Merged MR !42/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Summary 2/ })).toBeDefined()
-  expect(await ui.findAll({ type: 'Text', text: /^alpha$/ })).toHaveLength(2)
+  expect(await ui.find({ type: 'Text', text: /Merged MR !42/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Summary 1/ })).toBeDefined()
+  expect(await ui.findAll({ type: 'Text', text: /^alpha$/ })).toHaveLength(1)
 
   // Another turn within five minutes waits; after that, only the new line is added.
   await $.tool.call({ tool: 'Read', tool_use_id: 'r2', file_path: '/work/alpha/b.ts' } as never).catch(() => undefined)
@@ -303,7 +303,7 @@ test('a turn with tools brings a summary; only new milestones become messages', 
   await clock.advance(5 * 60_000)
   expect(calls.models.length).toBe(2)
   const card = (store.get(cardKey('self'))) as Card
-  expect(card.feed.map(f => f.text)).toEqual(['Login page works end to end', 'Merged MR !42 (memory: may merge)', 'Tests green on CI'])
+  expect(card.feed.map(f => f.text)).toEqual(['Login page works end to end', 'Tests green on CI'])
 })
 
 test('a turn without tools brings no summary', async ($, on) => {
@@ -524,4 +524,89 @@ test('old data is pruned after seven days; mutes stay', () => {
   }
   expect(staleKeys(entries, NOW)).toEqual(['card:old', 'reply:old:t1', 'ack:x'])
   expect(newItems({ milestones: ['A done'], authorized: [] }, { milestones: ['a done.', 'B done'], authorized: ['C'] })).toEqual({ milestones: ['B done'], authorized: ['C'] })
+})
+
+
+test('an undefined baseline posts only the newest milestone', () => {
+  const next = { milestones: ['First', 'Second', 'Newest'], authorized: ['Old deploy', 'Latest deploy'] }
+  expect(newItems(undefined, next)).toEqual({ milestones: ['Newest'], authorized: [] })
+  expect(newItems(undefined, { milestones: [], authorized: ['Deploy'] })).toEqual({ milestones: [], authorized: [] })
+  expect(newItems(next, next)).toEqual({ milestones: [], authorized: [] })
+})
+
+test('each run selects only the newest new item of each kind', () => {
+  const prev = { milestones: ['Existing'], authorized: ['Old permission'] }
+  const next = { milestones: ['First', 'Newest', 'existing!'], authorized: ['Deploy', 'Publish', 'old permission.'] }
+  expect(newItems(prev, next)).toEqual({ milestones: ['Newest'], authorized: ['Publish'] })
+  expect(newItems(next, next)).toEqual({ milestones: [], authorized: [] })
+})
+
+test('malformed stored summaries are dropped instead of reaching normalize', () => {
+  const next = { milestones: ['First', 'Newest'], authorized: ['Deploy'] }
+  for (const prev of [null, 42, 'bad', {}, [], { milestones: [], authorized: 'bad' },
+    { milestones: [42], authorized: [] }, { milestones: ['Valid', null], authorized: [] },
+    { milestones: [], authorized: [{}] }, { milestones: ['   '], authorized: [] }]) {
+    expect(readSummary(prev)).toBeUndefined()
+    expect(newItems(prev as never, next)).toEqual({ milestones: ['Newest'], authorized: [] })
+  }
+  expect(readSummary({ milestones: [' Done '], authorized: [] })).toEqual({ milestones: ['Done'], authorized: [] })
+})
+
+test('summary runs retain the full baseline and self-heal malformed storage', async ($, on) => {
+  let summary = { milestones: ['First', 'Second', 'Newest'], authorized: ['Old deploy', 'Latest deploy'] }
+  const { calls, clock, store } = stub(on, {
+    entries: { [cardKey('self')]: otherCard({ sid: 'self', tasks: [], summary: { milestones: [42], authorized: [] } as never }) },
+    model: () => ({ isAnswered: true, text: JSON.stringify(summary) }),
+  })
+  await start($)
+  expect((store.get(cardKey('self')) as Card).summary).toBeUndefined()
+  const run = async () => {
+    await $.tool.call({ tool: 'Read', tool_use_id: 'r', file_path: '/x' } as never).catch(() => undefined)
+    await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 10, isAborted: false, turnId: 'turn' })
+    await clock.advance(5 * 60_000 + 3_000)
+    await clock.settle()
+  }
+  await run()
+  expect((store.get(cardKey('self')) as Card).summary).toEqual(summary)
+  expect((store.get(cardKey('self')) as Card).feed.map(f => f.text)).toEqual(['Newest'])
+  expect(calls.prompts[0]).toContain('Previous summary:\n{"milestones":[],"authorized":[]}')
+  summary = { milestones: [...summary.milestones, 'Fourth', 'Fifth'], authorized: [...summary.authorized, 'Deploy', 'Publish'] }
+  await run()
+  expect((store.get(cardKey('self')) as Card).summary).toEqual(summary)
+  expect((store.get(cardKey('self')) as Card).feed.map(f => f.text)).toEqual(['Newest', 'Fifth', 'Publish'])
+  await run()
+  const card = store.get(cardKey('self')) as Card
+  expect(card.feed.map(f => f.text)).toEqual(['Newest', 'Fifth', 'Publish'])
+  expect(card.paused).toBeUndefined()
+})
+
+test('a card in the previous stored shape keeps its baseline, tasks and feed on reload', async ($, on) => {
+  const previous = otherCard({
+    sid: 'self',
+    summary: { milestones: ['Login works'], authorized: ['Deployed with standing permission'] },
+    summaryAt: NOW - 6 * 60_000,
+    feed: [{ id: 'self:existing', kind: 'milestone', text: 'Login works', at: NOW - 6 * 60_000 }],
+  })
+  const next = { milestones: ['Login works', 'Export works'], authorized: ['Deployed with standing permission', 'Published with standing permission'] }
+  const { calls, clock, store } = stub(on, {
+    entries: { [cardKey('self')]: previous },
+    model: () => ({ isAnswered: true, text: JSON.stringify(next) }),
+  })
+  await start($)
+  const loaded = store.get(cardKey('self')) as Card
+  expect(loaded.summary).toEqual(previous.summary)
+  expect(loaded.summaryAt).toBe(previous.summaryAt)
+  expect(loaded.tasks).toEqual(previous.tasks)
+  expect(loaded.feed).toEqual(previous.feed)
+
+  await $.tool.call({ tool: 'Read', tool_use_id: 'old-card', file_path: '/x' } as never).catch(() => undefined)
+  await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 10, isAborted: false, turnId: 'turn' })
+  await clock.advance(3_000)
+  await clock.settle()
+  expect(calls.prompts[0]).toContain(`Previous summary:\n${JSON.stringify(previous.summary)}`)
+  const updated = store.get(cardKey('self')) as Card
+  expect(updated.summary).toEqual(next)
+  expect(updated.tasks).toEqual(previous.tasks)
+  expect(updated.feed.map(f => f.text)).toEqual(['Login works', 'Export works', 'Published with standing permission'])
+  expect(updated.paused).toBeUndefined()
 })
