@@ -9,7 +9,7 @@ export const POLL_MS = 3_000
 export const HEARTBEAT_MS = 60_000
 export const STALE_MS = 3 * 60_000
 export const PRUNE_MS = 7 * 24 * 60 * 60_000
-export const SUMMARY_GAP_MS = 5 * 60_000
+export const SUMMARY_GAP_MS = 30 * 60_000
 export const MAX_OPEN_TASKS = 5
 export const MAX_FEED = 60
 

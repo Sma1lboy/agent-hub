@@ -62,7 +62,7 @@ Guards:
 
 ### Summary
 
-After each turn that used tools, Standup asks Haiku to summarize that session's transcript, at most once every 5 minutes per session. If Haiku is unavailable it uses the session's own model. The new summary is compared with the previous one, and each new line becomes its own message in the stream, newest first, labelled with its project:
+After each turn that used tools, Standup asks Haiku to summarize that session's transcript, at most once every 30 minutes per session. If Haiku is unavailable it uses the session's own model. The new summary is compared with the previous one, and each new line becomes its own message in the stream, newest first, labelled with its project:
 
 Every message is one outcome, marked ✓, at the level you would tell a teammate: "login works", not the commits and test runs behind it. Reading code, answering a question, a plan, a half-finished step or a commit never count. Consequential things Claude did without asking (a merge, a release, a deploy) because your memory, CLAUDE.md, settings or an earlier general yes covered it get a message too, with the permission named at the end.
 
@@ -114,7 +114,7 @@ claude plugin validate .claude-plugin/plugin.json
 claude plugin test .
 ```
 
-20 unit tests cover assigning, cross-session answers, secret refusal, reply delivery, stale sessions, the feed and its 5-minute gap, model fallback, paused updates, OK and mutes, settings sync, auto-open, registration after a reload, the system-prompt section, the after-compact reminder, Jump, the divider, and pruning, on both the terminal and desktop surfaces.
+20 unit tests cover assigning, cross-session answers, secret refusal, reply delivery, stale sessions, the feed and its 30-minute gap, model fallback, paused updates, OK and mutes, settings sync, auto-open, registration after a reload, the system-prompt section, the after-compact reminder, Jump, the divider, and pruning, on both the terminal and desktop surfaces.
 
 ```bash
 bun evals/run.ts all

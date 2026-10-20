@@ -3,7 +3,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine, MountTarget } from 'claude-code/testing'
 
 import type { Card, Task } from '../types'
-import { DEFAULT_SETTINGS, readSettings, STALE_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys } from '../hooks/hub'
+import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys } from '../hooks/hub'
 
 // Standup end to end against the engine's own test host: one session ("self")
 // plus other sessions seeded straight into the shared store.
@@ -362,12 +362,14 @@ test('a turn with tools brings a summary; only new milestones become messages', 
   expect(await ui.find({ type: 'Text', text: /Summary 1/ })).toBeDefined()
   expect(await ui.findAll({ type: 'Text', text: /^alpha$/ })).toHaveLength(1)
 
-  // Another turn within five minutes waits; after that, only the new line is added.
+  // Another turn within thirty minutes waits; after that, only the new line is added.
   await $.tool.call({ tool: 'Read', tool_use_id: 'r2', file_path: '/work/alpha/b.ts' } as never).catch(() => undefined)
   await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 10, isAborted: false, turnId: 'turn' })
   await clock.advance(3_000)
   expect(calls.models.length).toBe(1)
-  await clock.advance(5 * 60_000)
+  await clock.advance(20 * 60_000)
+  expect(calls.models.length).toBe(1)
+  await clock.advance(10 * 60_000)
   expect(calls.models.length).toBe(2)
   const card = (store.get(cardKey('self'))) as Card
   expect(card.feed.map(f => f.text)).toEqual(['Login page works end to end', 'Tests green on CI'])
@@ -399,7 +401,7 @@ test("when Haiku is unavailable the session's own model writes the summary; when
   fail = 'all'
   await $.tool.call({ tool: 'Read', tool_use_id: 'r2', file_path: '/x' } as never).catch(() => undefined)
   await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 10, isAborted: false, turnId: 'turn' })
-  await clock.advance(5 * 60_000 + 3_000)
+  await clock.advance(SUMMARY_GAP_MS + 3_000)
   const ui = await $.ui.mount(pane('terminal'))
   expect(await ui.find({ type: 'Text', text: /Updates paused: API error 404 not_found_error/ })).toBeDefined()
 })
@@ -630,7 +632,7 @@ test('summary runs retain the full baseline and self-heal malformed storage', as
   const run = async () => {
     await $.tool.call({ tool: 'Read', tool_use_id: 'r', file_path: '/x' } as never).catch(() => undefined)
     await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 10, isAborted: false, turnId: 'turn' })
-    await clock.advance(5 * 60_000 + 3_000)
+    await clock.advance(SUMMARY_GAP_MS + 3_000)
     await clock.settle()
   }
   await run()
@@ -651,8 +653,8 @@ test('a card in the previous stored shape keeps its baseline, tasks and feed on 
   const previous = otherCard({
     sid: 'self',
     summary: { milestones: ['Login works'], authorized: ['Deployed with standing permission'] },
-    summaryAt: NOW - 6 * 60_000,
-    feed: [{ id: 'self:existing', kind: 'milestone', text: 'Login works', at: NOW - 6 * 60_000 }],
+    summaryAt: NOW - SUMMARY_GAP_MS - 60_000,
+    feed: [{ id: 'self:existing', kind: 'milestone', text: 'Login works', at: NOW - SUMMARY_GAP_MS - 60_000 }],
   })
   const next = { milestones: ['Login works', 'Export works'], authorized: ['Deployed with standing permission', 'Published with standing permission'] }
   const { calls, clock, store } = stub(on, {

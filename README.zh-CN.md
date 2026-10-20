@@ -61,7 +61,7 @@ Claude 遇到只有你能做的事，比如放密钥、在你的机器或账号�
 
 ### 进展
 
-某个 session 跑完一轮用过工具的对话后，Standup 用 Haiku 读它的对话记录写一份总结，同一个 session 至少隔 5 分钟才写一次；Haiku 不可用时改用这个 session 自己的模型。新总结和上一份比，多出来的每一条成为一条消息。
+某个 session 跑完一轮用过工具的对话后，Standup 用 Haiku 读它的对话记录写一份总结，同一个 session 至少隔 30 分钟才写一次；Haiku 不可用时改用这个 session 自己的模型。新总结和上一份比，多出来的每一条成为一条消息。
 
 每条消息是一个成果，粒度是你跟同事一句话能说清的程度，比如「登录做好了」，而不是背后的提交和测试。读代码、回答问题、计划、做了一半的步骤、commit，都不算。Claude 依据已有授权（memory、CLAUDE.md、settings，或之前一句笼统的同意）没问你就做了的重要操作，比如合并、发版、部署，也会记一条，末尾写明依据哪条授权。
 
@@ -115,7 +115,7 @@ claude plugin test .
 bun evals/run.ts all
 ```
 
-单测覆盖派任务、跨 session 回答、拒收密钥、回答送达、离开的 session、进展和 5 分钟间隔、模型回退、暂停提示、OK 和全部已读、屏蔽、设置同步、自动打开、reload 后的注册、system prompt 那段、compact 后的提醒、跳转、分隔线、待办折叠和清理，终端和桌面两种界面都测。eval 用真实模型跑，结果追加到 `evals/results.jsonl`，并和上一轮对比标出 `fixed` 或 `REGRESSED`：总结 12 个用例（Haiku，约 $0.02 一轮），派任务行为 5 个用例（Opus，每个用例一个临时 git 沙盒，约 $1.6 一轮）。eval 通过 `--plugin-dir` 加载 mod，用的是单独的 store，测试任务不会出现在你真实的面板里。
+单测覆盖派任务、跨 session 回答、拒收密钥、回答送达、离开的 session、进展和 30 分钟间隔、模型回退、暂停提示、OK 和全部已读、屏蔽、设置同步、自动打开、reload 后的注册、system prompt 那段、compact 后的提醒、跳转、分隔线、待办折叠和清理，终端和桌面两种界面都测。eval 用真实模型跑，结果追加到 `evals/results.jsonl`，并和上一轮对比标出 `fixed` 或 `REGRESSED`：总结 12 个用例（Haiku，约 $0.02 一轮），派任务行为 5 个用例（Opus，每个用例一个临时 git 沙盒，约 $1.6 一轮）。eval 通过 `--plugin-dir` 加载 mod，用的是单独的 store，测试任务不会出现在你真实的面板里。
 
 ## 许可
 
