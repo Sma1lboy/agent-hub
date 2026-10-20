@@ -114,7 +114,7 @@ claude plugin validate .claude-plugin/plugin.json
 claude plugin test .
 ```
 
-44 unit tests cover assigning, cross-session answers, secret refusal, reply delivery, stale sessions, the feed and its 30-minute gap, model fallback, paused updates, OK and mutes, settings sync, auto-open, registration after a reload, the system-prompt section, the after-compact reminder, Jump, the divider, and pruning, on both the terminal and desktop surfaces.
+48 unit tests cover assigning (parallel calls included), cross-session answers, secret refusal, reply delivery (a dropped prompt kept for after the turn, overlapping polls submitting once), stale sessions, the feed and its 30-minute gap, model fallback, paused updates, OK and mutes, settings sync, auto-open, the band keeping other mods' content, registration after a reload, the system-prompt section, the after-compact reminder, Jump, the divider, and pruning, on both the terminal and desktop surfaces.
 
 ```bash
 bun evals/run.ts all

@@ -28,6 +28,8 @@ type Opts = {
   entries?: Record<string, unknown>
   host?: string
   model?: (model: string, prompt: string) => { isAnswered: true; text: string } | { isAnswered: false; reason: 'api-error'; status: number; error: string }
+  // What a prompt.submit returns; the default lets every prompt in.
+  submit?: (text: string) => { text: string } | { drop: string } | Promise<{ text: string } | { drop: string }>
 }
 
 function stub(on: On, opts: Opts = {}) {
@@ -73,9 +75,9 @@ function stub(on: On, opts: Opts = {}) {
     return { value: { isPlaced: true } }
   })
   on('ui.log', () => ({ value: undefined }))
-  on('prompt.submit', ($, e) => {
+  on('prompt.submit', async ($, e) => {
     calls.submitted.push(e.text)
-    return { text: e.text }
+    return (await opts.submit?.(e.text)) ?? { text: e.text }
   })
   on('process.run', ($, e) => {
     calls.run.push([...e.argv])
@@ -180,6 +182,15 @@ test('assign_task refuses bad input, duplicates and a sixth open task', async ($
   for (let i = 0; i < 4; i++) await assign($, { kind: 'do', title: `Task number ${i}` })
   const sixth = await assign($, { kind: 'do', title: 'One too many' })
   expect(sixth.deny).toContain('5 open tasks')
+})
+
+test('parallel assign_task calls still respect duplicates and the cap of five', async ($, on) => {
+  const { store } = stub(on)
+  await start($)
+  await Promise.all([assign($, { kind: 'do', title: 'Approve the build' }), assign($, { kind: 'do', title: 'approve the build!' })])
+  expect(((store.get(cardKey('self'))) as Card).tasks.length).toBe(1)
+  await Promise.all(['a', 'b', 'c', 'd', 'e', 'f'].map(x => assign($, { kind: 'do', title: `Task ${x}` })))
+  expect(((store.get(cardKey('self'))) as Card).tasks.length).toBe(5)
 })
 
 test('withdraw_task and list_tasks', async ($, on) => {
@@ -316,6 +327,50 @@ test('a reply for this session reaches the model as a prompt, once', async ($, o
   expect(((store.get(cardKey('self'))) as Card).tasks).toEqual([])
   await clock.advance(10_000)
   expect(calls.submitted.length).toBe(1)
+})
+
+test('a reply whose prompt a hook drops stays until the next turn ends, then is delivered once', async ($, on) => {
+  const task: Task = { id: 'tq', kind: 'answer', title: 'Which region?', createdAt: NOW }
+  const mine: Card = { ...otherCard({ sid: 'self', name: 'alpha', hostId: undefined }), tasks: [task] }
+  let blocked = true
+  const { calls, clock, store } = stub(on, {
+    entries: { [cardKey('self')]: mine, [replyKey('self', 'tq')]: { answer: 'us-east-1', at: NOW, by: 'other' } },
+    submit: text => (blocked ? { drop: 'blocked by another mod' } : { text }),
+  })
+  await start($)
+  expect(calls.submitted.length).toBe(1)
+  expect(store.get(replyKey('self', 'tq'))).toBeDefined()
+  expect(((store.get(cardKey('self'))) as Card).tasks.map(x => x.id)).toEqual(['tq'])
+  // Not retried on every poll: the drop reason would be shown again each time.
+  await clock.advance(10_000)
+  expect(calls.submitted.length).toBe(1)
+
+  blocked = false
+  await $.turn.complete({ answer: 'Done' } as never)
+  await clock.advance(3_000)
+  const message = '[Standup] The user answered your task tq ("Which region?"):\nus-east-1'
+  expect(calls.submitted).toEqual([message, message])
+  expect(store.get(replyKey('self', 'tq'))).toBeUndefined()
+  expect(((store.get(cardKey('self'))) as Card).tasks).toEqual([])
+  await clock.advance(10_000)
+  expect(calls.submitted.length).toBe(2)
+})
+
+test('a reply is submitted once even when a poll comes due while its submit is still pending', async ($, on) => {
+  const task: Task = { id: 'tq', kind: 'do', title: 'Rotate the key', createdAt: NOW }
+  const mine: Card = { ...otherCard({ sid: 'self', name: 'alpha', hostId: undefined }), tasks: [task] }
+  // The prompt enters only once the running turn lets it: until then the submit is pending.
+  let enter = () => {}
+  const entered = new Promise<void>(resolve => (enter = resolve))
+  const { calls, clock, store } = stub(on, { entries: { [cardKey('self')]: mine }, submit: async text => (await entered, { text }) })
+  await start($)
+  store.set(replyKey('self', 'tq'), { answer: '', at: NOW, by: 'other' })
+  await clock.advance(3_000)
+  await clock.advance(3_000)
+  await clock.advance(3_000)
+  enter()
+  await clock.advance(3_000)
+  expect(calls.submitted).toEqual(['[Standup] The user marked your task tq as done: "Rotate the key".'])
 })
 
 test('Done on a do-task sends a done message', async ($, on) => {
@@ -463,6 +518,16 @@ test('in a plain terminal /standup toggles a band above the prompt instead of a 
   expect(String((await run()).text)).toContain('closed')
   const closed = await $.ui.mount(band)
   expect(await closed.find({ type: 'Text', text: 'Which region should prod use?' })).toBeUndefined()
+})
+
+test("the open band keeps another mod's band content above the panel", async ($, on) => {
+  stub(on, { surfaces: ['terminal'], entries: { [cardKey('other')]: otherCard() } })
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['another mod notice'] }))
+  await start($)
+  const band = { plugin: 'standup', surface: 'terminal', component: 'AbovePrompt', viewport: { columns: 100, rows: 40 }, props: { hasSurvey: false, isWorking: false, maxRows: 30, bodyColumns: 96, scroll: { offset: 0, bodyRows: 30 } } } as MountTarget<'terminal', 'AbovePrompt'>
+  const ui = await $.ui.mount(band)
+  expect(await ui.find({ type: 'Text', text: 'another mod notice' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Which region should prod use?' })).toBeDefined()
 })
 
 test('terminal startup opens the band once and respects closing it', async ($, on) => {

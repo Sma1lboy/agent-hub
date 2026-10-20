@@ -68,6 +68,9 @@ const rt = {
   summarizing: false,
   lastPrune: 0,
   seenSessions: '',
+  // Replies whose prompt a hook dropped: kept, and tried again once the next turn ends.
+  held: new Set<string>(),
+  sending: new Set<string>(),
   writes: Promise.resolve() as Promise<unknown>,
 }
 
@@ -155,7 +158,7 @@ async function poll($: EngineInterface) {
   // Answers other sessions wrote for this one.
   const mine = Object.keys(entries).filter(key => key.startsWith(`reply:${rt.sid}:`))
   if (mine.length) {
-    await deliver($, mine.map(key => [key.slice(`reply:${rt.sid}:`.length), entries[key] as Reply] as const))
+    await deliver($, mine.map(key => key.slice(`reply:${rt.sid}:`.length)))
     entries = await readAll($)
   }
 
@@ -188,16 +191,30 @@ async function poll($: EngineInterface) {
 }
 
 /** Hands each answer to the model as a prompt: at once when idle, after the turn when busy. */
-async function deliver($: EngineInterface, replies: readonly (readonly [string, Reply])[]) {
+async function deliver($: EngineInterface, ids: readonly string[]) {
   const card = (await $.store.get(cardKey(rt.sid))) as Card | undefined
-  for (const [id, reply] of replies) {
-    const task = card?.tasks.find(x => x.id === id)
-    // Submit first: if it fails, the reply key stays and the next poll tries again.
-    if (task) await $.prompt.submit({ text: replyMessage(task, reply) })
-    await $.store.delete(replyKey(rt.sid, id))
+  const answered = new Set<string>()
+  for (const id of ids) {
+    // Polls can overlap: one whose reply is mid-submit, or already delivered, leaves it alone.
+    if (rt.held.has(id) || rt.sending.has(id)) continue
+    rt.sending.add(id)
+    try {
+      const reply = (await $.store.get(replyKey(rt.sid, id))) as Reply | undefined
+      if (!reply) continue
+      const task = card?.tasks.find(x => x.id === id)
+      // Submit first: if it throws, the reply key stays and the next poll tries again.
+      // If a hook drops it, the reply and task stay until the next turn ends.
+      if (task && 'drop' in (await $.prompt.submit({ text: replyMessage(task, reply) }))) {
+        rt.held.add(id)
+        continue
+      }
+      await $.store.delete(replyKey(rt.sid, id))
+    } finally {
+      rt.sending.delete(id)
+    }
+    answered.add(id)
   }
-  const answered = new Set(replies.map(([id]) => id))
-  await mutateCard($, c => ({ ...c, tasks: c.tasks.filter(task => !answered.has(task.id)) }))
+  if (answered.size) await mutateCard($, c => ({ ...c, tasks: c.tasks.filter(task => !answered.has(task.id)) }))
 }
 
 // ---- the feed ----
@@ -331,12 +348,6 @@ export const register: Register = on => {
     const options = Array.isArray(input.options) ? input.options.map(String).map(s => s.trim()).filter(Boolean) : []
     if (kind === 'choose' && (options.length < 2 || options.length > 4)) return { deny: 'kind "choose" needs 2 to 4 options.' }
 
-    const card = (await $.store.get(cardKey(rt.sid))) as Card
-    const same = duplicateOf(card.tasks, title)
-    if (same) return { result: `Already assigned as ${same.id} and still open; not assigned again. The answer will arrive as a message.` }
-    if (card.tasks.length >= MAX_OPEN_TASKS) {
-      return { deny: `This session already has ${MAX_OPEN_TASKS} open tasks (${card.tasks.map(x => x.id).join(', ')}). Withdraw one with withdraw_task or wait for answers.` }
-    }
     const now = await $.clock.now()
     const task: Task = {
       id: `t${shortHash(rt.sid + title + now).slice(0, 5)}`,
@@ -346,7 +357,17 @@ export const register: Register = on => {
       ...(kind === 'choose' ? { options } : {}),
       createdAt: now,
     }
-    await mutateCard($, c => ({ ...c, tasks: [...c.tasks, task] }))
+    // Checked inside the card's write: parallel calls in one turn would each pass a check made before it.
+    let refusal: { result: string } | { deny: string } | undefined
+    await mutateCard($, c => {
+      const same = duplicateOf(c.tasks, title)
+      if (same) refusal = { result: `Already assigned as ${same.id} and still open; not assigned again. The answer will arrive as a message.` }
+      else if (c.tasks.length >= MAX_OPEN_TASKS) {
+        refusal = { deny: `This session already has ${MAX_OPEN_TASKS} open tasks (${c.tasks.map(x => x.id).join(', ')}). Withdraw one with withdraw_task or wait for answers.` }
+      }
+      return refusal ? c : { ...c, tasks: [...c.tasks, task] }
+    })
+    if (refusal) return refusal
     await poll($).catch(() => undefined)
     return { result: `Assigned task ${task.id} to the user in Standup. Do not wait or poll: carry on with work that does not need it, or end your turn. Their answer will arrive as a new message.` }
   })
@@ -377,6 +398,7 @@ export const register: Register = on => {
     if (e.agentId === undefined) {
       if (rt.toolsThisTurn > 0) rt.summaryDue = true
       rt.toolsThisTurn = 0
+      rt.held.clear()
     }
     return next(e)
   })
@@ -396,7 +418,15 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     void join($).catch(() => undefined)
     if (e.surface !== 'terminal' || e.props.hasSurvey || !(await read($, bandAtom))) return next(e)
-    return renderHub($, e, actions($))
+    // Another mod's band content stays, on top: the panel is tall and scrolls, so anything below it would sit out of view.
+    const theirs = await next(e)
+    const { Box } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column" gap="md">
+        {theirs}
+        {await renderHub($, e, actions($))}
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: HUB_PANE }, async ($, e) => {
