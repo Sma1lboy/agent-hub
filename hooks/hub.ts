@@ -123,26 +123,40 @@ export const duplicateOf = (tasks: readonly Task[], title: string) => tasks.find
 
 // ---- summaries ----
 
+const list = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string' && s.trim() !== '').map(s => s.trim()) : [])
+
+/** Stored summaries must contain two valid lists; otherwise start a new baseline. */
+export function readSummary(value: unknown): Summary | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const v = value as Partial<Summary>
+  if (!Array.isArray(v.milestones) || !Array.isArray(v.authorized)) return undefined
+  const milestones = list(v.milestones)
+  const authorized = list(v.authorized)
+  if (milestones.length !== v.milestones.length || authorized.length !== v.authorized.length) return undefined
+  return { milestones, authorized }
+}
+
 export function parseSummary(text: string): Summary | null {
   const match = text.match(/\{[\s\S]*\}/)
   if (!match) return null
   try {
     const v = JSON.parse(match[0]) as Partial<Summary>
-    const list = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string' && s.trim() !== '').map(s => s.trim()) : [])
     return { milestones: list(v.milestones), authorized: list(v.authorized) }
   } catch {
     return null
   }
 }
 
-/** Items in `next` that `prev` did not have, compared loosely. */
+/** Newest unseen item per kind; the first summary only announces its newest milestone. */
 export function newItems(prev: Summary | undefined, next: Summary): Summary {
+  prev = readSummary(prev)
+  if (!prev) return { milestones: next.milestones.slice(-1), authorized: [] }
   const seen = (list: readonly string[] | undefined) => new Set((list ?? []).map(normalize))
   const ms = seen(prev?.milestones)
   const au = seen(prev?.authorized)
   return {
-    milestones: next.milestones.filter(s => !ms.has(normalize(s))),
-    authorized: next.authorized.filter(s => !au.has(normalize(s))),
+    milestones: next.milestones.filter(s => !ms.has(normalize(s))).slice(-1),
+    authorized: next.authorized.filter(s => !au.has(normalize(s))).slice(-1),
   }
 }
 
