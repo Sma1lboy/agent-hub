@@ -2,8 +2,9 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine, MountTarget } from 'claude-code/testing'
 
+import { withFeedClaim } from '../hooks/feed-claim'
 import type { Card, Task } from '../types'
-import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys } from '../hooks/hub'
+import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys, summaryPrompt, recentFeed, overlapsFeed, feedGapPassed } from '../hooks/hub'
 
 // Standup end to end against the engine's own test host: one session ("self")
 // plus other sessions seeded straight into the shared store.
@@ -484,6 +485,7 @@ test('OK hides a message everywhere; No more like this, once turned on in settin
   await $.tool.call({ tool: 'Read', tool_use_id: 'r1', file_path: '/x' } as never).catch(() => undefined)
   await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 10, isAborted: false, turnId: 'turn' })
   await clock.advance(3_000)
+  await clock.advance(SUMMARY_GAP_MS)
   expect(calls.prompts[0]).toContain('- Bumped lodash')
 })
 
@@ -654,9 +656,10 @@ test('old data is pruned after seven days; mutes stay', () => {
     'card:new': otherCard({ sid: 'new' }),
     'reply:old:t1': { answer: 'x', at: NOW - week - 1, by: 'a' },
     'ack:x': NOW - week - 1,
+    'feed-claim:old': NOW - week - 1,
     'mute:x': { text: 'x', at: NOW - week - 1 },
   }
-  expect(staleKeys(entries, NOW)).toEqual(['card:old', 'reply:old:t1', 'ack:x'])
+  expect(staleKeys(entries, NOW)).toEqual(['card:old', 'reply:old:t1', 'ack:x', 'feed-claim:old'])
   expect(newItems({ milestones: ['A done'], authorized: [] }, { milestones: ['a done.', 'B done'], authorized: ['C'] })).toEqual({ milestones: ['B done'], authorized: ['C'] })
 })
 
@@ -707,10 +710,10 @@ test('summary runs retain the full baseline and self-heal malformed storage', as
   summary = { milestones: [...summary.milestones, 'Fourth', 'Fifth'], authorized: [...summary.authorized, 'Deploy', 'Publish'] }
   await run()
   expect((store.get(cardKey('self')) as Card).summary).toEqual(summary)
-  expect((store.get(cardKey('self')) as Card).feed.map(f => f.text)).toEqual(['Newest', 'Fifth', 'Publish'])
+  expect((store.get(cardKey('self')) as Card).feed.map(f => f.text)).toEqual(['Newest', 'Fifth'])
   await run()
   const card = store.get(cardKey('self')) as Card
-  expect(card.feed.map(f => f.text)).toEqual(['Newest', 'Fifth', 'Publish'])
+  expect(card.feed.map(f => f.text)).toEqual(['Newest', 'Fifth'])
   expect(card.paused).toBeUndefined()
 })
 
@@ -741,6 +744,155 @@ test('a card in the previous stored shape keeps its baseline, tasks and feed on 
   const updated = store.get(cardKey('self')) as Card
   expect(updated.summary).toEqual(next)
   expect(updated.tasks).toEqual(previous.tasks)
-  expect(updated.feed.map(f => f.text)).toEqual(['Login works', 'Export works', 'Published with standing permission'])
+  expect(updated.feed.map(f => f.text)).toEqual(['Login works', 'Export works'])
   expect(updated.paused).toBeUndefined()
+})
+
+test('summary prompt reports the overarching goal and sees the recent shared feed', () => {
+  const feed = recentFeed([otherCard({ feed: [{ id: 'f', kind: 'milestone', text: 'Judge page shows author and alias', at: NOW }] })])
+  const prompt = summaryPrompt('transcript', undefined, [], feed)
+  expect(prompt).toContain("session's single overarching goal")
+  expect(prompt).toContain('major stage')
+  expect(prompt).toContain('Never put PR or MR numbers in milestone headlines')
+  expect(prompt.includes('a release version, a PR or MR number')).toBe(false)
+  expect(prompt).toContain('Already reported across all sessions; do not repeat')
+  expect(prompt).toContain('Judge page shows author and alias')
+})
+
+test('recent feed is bounded and normalized overlap preserves distinct outcomes', () => {
+  const feed = Array.from({ length: 70 }, (_, i) => ({ id: String(i), kind: 'milestone' as const, text: `Outcome ${i}`, at: i }))
+  expect(recentFeed([otherCard({ feed })]).map(row => row.id)).toEqual(feed.slice(-60).reverse().map(row => row.id))
+  expect(overlapsFeed('Judge page shows author and alias, live', 'JUDGE page shows author and alias (!116, !117)')).toBe(true)
+  expect(overlapsFeed('评委页面已显示作者和别名', '评委页面已显示作者和别名！')).toBe(true)
+  expect(overlapsFeed('Login works', 'CSV export shipped')).toBe(false)
+  expect(overlapsFeed('Login works', 'Login broken')).toBe(false)
+  expect(overlapsFeed('', '')).toBe(false)
+})
+
+const toolTurn = async ($: Engine) => {
+  await $.tool.call({ tool: 'Read', tool_use_id: 'summary-read', file_path: '/x' } as never).catch(() => undefined)
+  await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 10, isAborted: false, turnId: 'turn' })
+}
+
+test('another session including an acknowledged departed card holds the global gap', async ($, on) => {
+  const feed = [{ id: 'f', kind: 'milestone' as const, text: 'Login works', at: NOW }]
+  const { calls, clock, store } = stub(on, {
+    entries: { [cardKey('other')]: otherCard({ feed, heartbeat: NOW - STALE_MS - 1 }), 'ack:f': NOW },
+    model: () => ({ isAnswered: true, text: '{"milestones":["CSV export shipped"],"authorized":[]}' }),
+  })
+  await start($)
+  await toolTurn($)
+  await clock.advance(SUMMARY_GAP_MS - 3_000)
+  expect(calls.models).toEqual([])
+  expect(feedGapPassed([otherCard({ feed })], NOW + SUMMARY_GAP_MS - 1)).toBe(false)
+  expect(feedGapPassed([otherCard({ feed })], NOW + SUMMARY_GAP_MS)).toBe(true)
+  await clock.advance(3_000)
+  await clock.settle()
+  expect(calls.models).toEqual(['haiku'])
+  expect((store.get(cardKey('self')) as Card).feed.map(row => row.text)).toEqual(['CSV export shipped'])
+  expect(calls.prompts[0]).toContain('Login works')
+})
+
+test('cross-session overlap is dropped even when the model repeats a read item', async ($, on) => {
+  const text = 'Judge page shows author and alias, live'
+  const { calls, clock, store } = stub(on, {
+    entries: {
+      [cardKey('other')]: otherCard({ feed: [{ id: 'f', kind: 'milestone', text, at: NOW - SUMMARY_GAP_MS }] }),
+      'ack:f': NOW,
+    },
+    model: () => ({ isAnswered: true, text: '{"milestones":["Judge page shows author and alias (!116, !117)"],"authorized":[]}' }),
+  })
+  await start($)
+  await toolTurn($)
+  await clock.advance(3_000)
+  await clock.settle()
+  const card = store.get(cardKey('self')) as Card
+  expect(card.feed).toEqual([])
+  expect(card.summary?.milestones).toEqual(['Judge page shows author and alias (!116, !117)'])
+  expect(calls.prompts[0]).toContain(text)
+})
+
+test('a publication during model completion defers without consuming the baseline', async ($, on) => {
+  const { clock, store } = stub(on, {
+    model: () => {
+      store.set(cardKey('other'), otherCard({ feed: [{ id: 'f', kind: 'authorized', text: 'Published docs', at: NOW + 3_000 }] }))
+      return { isAnswered: true, text: '{"milestones":["Login works"],"authorized":[]}' }
+    },
+  })
+  await start($)
+  await toolTurn($)
+  await clock.advance(3_000)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).feed).toEqual([])
+  expect((store.get(cardKey('self')) as Card).summary).toBeUndefined()
+  await clock.advance(SUMMARY_GAP_MS)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).feed.map(row => row.text)).toEqual(['Login works'])
+})
+
+test('global publication claims exclude simultaneous writers and release after errors', async () => {
+  const store = new Map<string, unknown>()
+  let now = NOW
+  const $ = {
+    store: {
+      get: async (key: string) => store.get(key),
+      set: async (key: string, value: unknown) => { store.set(key, value) },
+      delete: async (key: string) => { store.delete(key) },
+      keys: async () => [...store.keys()],
+    },
+    clock: { now: async () => now },
+  }
+  let release!: () => void
+  const held = new Promise<void>(resolve => { release = resolve })
+  let enter!: () => void
+  const entered = new Promise<void>(resolve => { enter = resolve })
+  const first = withFeedClaim($, 'a', async () => { enter(); await held; return true })
+  await entered
+  let secondEntered = false
+  expect(await withFeedClaim($, 'b', async () => { secondEntered = true; return true })).toBe(false)
+  expect(secondEntered).toBe(false)
+  release()
+  expect(await first).toBe(true)
+  expect(await withFeedClaim($, 'b', async () => true)).toBe(true)
+  await withFeedClaim($, 'a', async () => { throw new Error('write failed') }).catch(() => undefined)
+  expect([...store.keys()].filter(key => key.startsWith('feed-claim:'))).toEqual([])
+  let active = 0
+  let maxActive = 0
+  const publish = async () => {
+    active += 1
+    maxActive = Math.max(maxActive, active)
+    await Promise.resolve()
+    active -= 1
+    return true
+  }
+  await Promise.all(['a', 'b', 'c', 'd'].map(sid => withFeedClaim($, sid, publish)))
+  expect(maxActive <= 1).toBe(true)
+  expect(await withFeedClaim($, 'a', publish)).toBe(true)
+  // A crashed writer holds only one interval; a suspended writer cannot publish after expiry.
+  store.set('feed-claim:crashed', NOW)
+  expect(await withFeedClaim($, 'b', async () => true)).toBe(false)
+  now += SUMMARY_GAP_MS
+  expect(await withFeedClaim($, 'b', async valid => {
+    now += SUMMARY_GAP_MS
+    return valid()
+  })).toBe(false)
+  expect(await withFeedClaim($, 'b', async () => true)).toBe(true)
+})
+
+test('an abandoned claim delays publication without calling the model every poll', async ($, on) => {
+  const { calls, clock, store } = stub(on, {
+    entries: { 'feed-claim:crashed': NOW },
+    model: () => ({ isAnswered: true, text: '{"milestones":["Login works"],"authorized":[]}' }),
+  })
+  await start($)
+  await toolTurn($)
+  await clock.advance(3_000)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).summary).toBeUndefined()
+  await clock.advance(SUMMARY_GAP_MS - 3_000)
+  expect(calls.models).toEqual(['haiku'])
+  await clock.advance(3_000)
+  await clock.settle()
+  expect(calls.models).toEqual(['haiku', 'haiku'])
+  expect((store.get(cardKey('self')) as Card).feed.map(row => row.text)).toEqual(['Login works'])
 })

@@ -89,6 +89,7 @@ export function staleKeys(entries: Record<string, unknown>, now: number): string
     .filter(([key, value]) => {
       if (key.startsWith('card:')) return isCard(value) && now - value.heartbeat > PRUNE_MS
       if (key.startsWith('reply:')) return now - ((value as Reply)?.at ?? 0) > PRUNE_MS
+      if (key.startsWith('feed-claim:')) return now - Number(value ?? 0) > PRUNE_MS
       if (key.startsWith('ack:')) return now - Number(value ?? 0) > PRUNE_MS
       return false
     })
@@ -160,7 +161,33 @@ export function newItems(prev: Summary | undefined, next: Summary): Summary {
   }
 }
 
-export function summaryPrompt(transcript: string, prev: Summary | undefined, mutes: readonly Mute[]): string {
+/** Include read/dismissed and departed sessions too: acknowledging is not forgetting. */
+export function recentFeed(cards: readonly Card[]): FeedRow[] {
+  return cards.flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: card.name })))
+    .sort((a, b) => b.at - a.at).slice(0, MAX_FEED)
+}
+
+export function feedGapPassed(cards: readonly Card[], now: number): boolean {
+  return cards.every(card => card.feed.every(item => now - item.at >= SUMMARY_GAP_MS))
+}
+
+/** Character bigrams also work for Chinese, which has no word separators. */
+export function overlapsFeed(a: string, b: string): boolean {
+  const compact = (s: string) => normalize(s).replace(/ /g, '')
+  const x = compact(a), y = compact(b)
+  if (!x || !y) return false
+  if (x === y) return true
+  const grams = (s: string) => {
+    const chars = Array.from(s)
+    return new Set(chars.slice(1).map((c, i) => chars[i]! + c))
+  }
+  const left = grams(x), right = grams(y)
+  const shared = [...left].filter(g => right.has(g)).length
+  // Require substantial overlap on BOTH sides; shared boilerplate is not enough.
+  return shared >= 6 && shared / Math.max(left.size, right.size) >= 0.8
+}
+
+export function summaryPrompt(transcript: string, prev: Summary | undefined, mutes: readonly Mute[], recent: readonly FeedRow[] = []): string {
   const muted = mutes.length ? mutes.map(m => `- ${m.text}`).join('\n') : '(none)'
   return [
     'You maintain a running progress summary of one Claude Code session for its owner, who watches many sessions at once.',
@@ -168,17 +195,20 @@ export function summaryPrompt(transcript: string, prev: Summary | undefined, mut
     '',
     'The owner skims this across many sessions, so think in OUTCOMES, at the level they would tell a teammate in one breath: "login works", "the CSV export shipped", "the flaky test is fixed". Not the steps that got there.',
     '',
-    'milestones: GOALS that are DONE and WORKING: a feature, a fixed bug, a release, a finished deliverable. A goal is what the owner set out to get, not each request on the way: fold every step, request, commit, fix-up and test run that served it into one line; a long session usually has one or two, rarely more.',
+    "milestones: the session's single overarching goal reaching DONE and WORKING, or a major stage of that goal completing. Think daily standup: a few lines per agent per day. An individual PR, MR, request or finished run is not a goal; fold those steps into the overarching goal they serve.",
     'Small follow-ups after or around a goal add NOTHING: tweaking wording or links, removing or moving a section, re-rendering, copying or moving files, pushing, renaming, a side fix found on the way. They belong to the goal they served, already listed or not.',
     'Never mention commits, pushes, branches or hashes anywhere: the owner does not care how work was saved, only what now works.',
     'Never a milestone: a single tool call; a commit or push; reading, exploring or explaining code; answering a question; a plan; a step of an unfinished task (tests failing, "next I will...", half-done refactors). When unsure, leave it out: an empty list is the usual answer.',
-    'Write each line short (about 12 words, or 25 Chinese characters) and plain: no commit hashes, file paths, command names, flags, test counts or tool names, unless the number IS the outcome (a release version, a PR or MR number).',
+    'Write each line short (about 12 words, or 25 Chinese characters) and plain: no commit hashes, file paths, command names, flags, test counts or tool names, except a release version when it IS the outcome. Never put PR or MR numbers in milestone headlines.',
     'authorized: consequential actions the agent took WITHOUT asking because a standing permission covered them (memory, CLAUDE.md, settings, or a general yes given earlier for that kind of action): merging, releasing or tagging, deploying, publishing, deleting, sending something outside, spending money. Routine local work (editing, committing, running tests) is never worth listing here. Name the permission briefly, e.g. "merged MR !42 (memory: may merge)".',
     'If the agent asked about that specific action and the owner said yes, it was asked: it is not authorized, list it as a milestone only if it is one.',
     '',
     'Keep every item from the previous summary that is still true, copied WORD FOR WORD, then add new ones; if a new outcome is a later stage of an old line, add the new line rather than rewording the old one. In the language the session is in. At most 8 per list.',
     'Skip anything similar in kind to these muted items:',
     muted,
+    '',
+    'Already reported across all sessions; do not repeat these outcomes as NEW items, even with different wording or PR/MR numbers. Still keep previous-summary items verbatim:',
+    JSON.stringify(recent.map(({ sid, text }) => ({ sid, text }))),
     '',
     'Previous summary:',
     JSON.stringify(prev ?? { milestones: [], authorized: [] }),

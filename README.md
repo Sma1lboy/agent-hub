@@ -62,9 +62,11 @@ Guards:
 
 ### Summary
 
-After each turn that used tools, Standup asks Haiku to summarize that session's transcript, at most once every 30 minutes per session. If Haiku is unavailable it uses the session's own model. The new summary is compared with the previous one, and each new line becomes its own message in the stream, newest first, labelled with its project:
+After each turn that used tools, Standup asks Haiku to summarize that session's transcript, at most once every 30 minutes per session. If Haiku is unavailable it uses the session's own model. The whole panel admits at most one new message every 30 minutes across all sessions, including consequential authorized actions. A session delayed by another publication retries later without losing its baseline. Each run keeps the newest unseen milestone, or an authorized action if there is no new milestone, and retains the full summary as its next baseline.
 
-Every message is one outcome, marked ✓, at the level you would tell a teammate: "login works", not the commits and test runs behind it. Reading code, answering a question, a plan, a half-finished step or a commit never count. Consequential things Claude did without asking (a merge, a release, a deploy) because your memory, CLAUDE.md, settings or an earlier general yes covered it get a message too, with the permission named at the end.
+A milestone is the session’s overarching goal finishing, or a major stage of that goal: a daily standup update, not each PR, MR or finished run. PR/MR numbers do not belong in milestone headlines. Reading code, answering a question, a plan, a half-finished step or a commit never count. Consequential things Claude did without asking (a merge, a release, a deploy) because your memory, CLAUDE.md, settings or an earlier general yes covered it get a message too, with the permission named at the end.
+
+The prompt sees the latest 60 feed items across all sessions as already reported. New lines with strongly overlapping normalized text from another session are also dropped before publication. Read messages and departed sessions still count for deduplication and cadence.
 
 Messages stay after their session closes. **OK** hides a message in every session. **No more like this** (turn it on in `/standup-settings`) also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the Summary section says `<project>: Updates paused: <reason>`.
 
@@ -87,8 +89,9 @@ All data lives in the mod's `$.store`, one JSON file under `~/.claude/plugins/st
 | `ack:<message>` | OK on a message | any session |
 | `mute:<message>` | a "No more like this" | any session |
 | `settings` | the settings | any session |
+| `feed-claim:<session>` | temporary publication claim timestamp | that session |
 
-Every session reads the store every 3 seconds and writes a heartbeat every 60. A session with no heartbeat for 3 minutes is treated as gone and its tasks leave the panel. Cards, replies and OKs older than 7 days are deleted; mutes are kept.
+Every session reads the store every 3 seconds and writes a heartbeat every 60. A session with no heartbeat for 3 minutes is treated as gone and its tasks leave the panel. Cards, replies, OKs and abandoned claims older than 7 days are deleted; mutes are kept. Publication claims serialize competing writers and are removed after the write, including failures; a crashed writer’s claim expires after 30 minutes. Existing card and settings formats are unchanged.
 
 `/reload-plugins` does not fire `session.start`, so joining the store and registering the commands and tools happens on whichever hook runs first.
 
@@ -114,7 +117,7 @@ claude plugin validate .claude-plugin/plugin.json
 claude plugin test .
 ```
 
-48 unit tests cover assigning (parallel calls included), cross-session answers, secret refusal, reply delivery (a dropped prompt kept for after the turn, overlapping polls submitting once), stale sessions, the feed and its 30-minute gap, model fallback, paused updates, OK and mutes, settings sync, auto-open, the band keeping other mods' content, registration after a reload, the system-prompt section, the after-compact reminder, Jump, the divider, and pruning, on both the terminal and desktop surfaces.
+55 unit tests cover assigning (parallel calls included), cross-session answers, secret refusal, reply delivery (a dropped prompt kept for after the turn, overlapping polls submitting once), stale sessions, goal-level prompts, shared-feed deduplication, the global 30-minute gap and competing publications, model fallback, paused updates, OK and mutes, settings sync, auto-open, the band keeping other mods' content, registration after a reload, the system-prompt section, the after-compact reminder, Jump, the divider, and pruning, on both the terminal and desktop surfaces.
 
 ```bash
 bun evals/run.ts all
