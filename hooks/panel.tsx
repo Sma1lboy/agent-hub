@@ -216,7 +216,7 @@ export async function renderSettings($: EngineInterface, e: PaneInput, act: Acti
   const { Box, Text, Button } = $.ui.resolve(e)
   const settings = (await read($, settingsAtom)) ?? DEFAULT_SETTINGS
   const tx = (key: CopyKey) => t(settings.lang, key)
-  const toggle = (key: 'autoOpen' | 'divider' | 'muteButton') => (
+  const toggle = (key: 'openOnStart' | 'autoOpen' | 'divider' | 'muteButton') => (
     <Box flexDirection="row" gap="sm">
       {([true, false] as const).map(on => (
         <Button key={`toggle-${key}-${on ? 'on' : 'off'}`} variant={settings[key] === on ? 'primary' : 'secondary'} label={on ? tx('on') : tx('off')} onPress={() => act.setSettings({ [key]: on })} />
@@ -233,6 +233,10 @@ export async function renderSettings($: EngineInterface, e: PaneInput, act: Acti
             <Button key={`lang-${value}`} variant={settings.lang === value ? 'primary' : 'secondary'} label={label} onPress={() => act.setSettings({ lang: value })} />
           ))}
         </Box>
+      </Box>
+      <Box flexDirection="row" gap={2} alignItems="center">
+        <Text>{tx('openOnStart')}</Text>
+        {toggle('openOnStart')}
       </Box>
       <Box flexDirection="row" gap={2} alignItems="center">
         <Text>{tx('autoOpen')}</Text>

@@ -19,12 +19,13 @@ export const ackKey = (id: string) => `ack:${id}`
 export const muteKey = (id: string) => `mute:${id}`
 export const SETTINGS_KEY = 'settings'
 
-export const DEFAULT_SETTINGS: HubSettings = { lang: 'zh', autoOpen: true, divider: false, muteButton: false, taskRows: 12 }
+export const DEFAULT_SETTINGS: HubSettings = { lang: 'zh', openOnStart: true, autoOpen: true, divider: false, muteButton: false, taskRows: 12 }
 
 export function readSettings(value: unknown): HubSettings {
   const v = (value ?? {}) as Partial<HubSettings>
   return {
     lang: v.lang === 'en' ? 'en' : 'zh',
+    openOnStart: v.openOnStart !== false,
     autoOpen: v.autoOpen !== false,
     divider: v.divider === true,
     muteButton: v.muteButton === true,
@@ -222,6 +223,7 @@ const EN = {
   closed: 'Agent Hub closed.',
   settingsOpened: 'Agent Hub settings opened.',
   language: 'Language',
+  openOnStart: 'Open on session start',
   autoOpen: 'Open when a task arrives',
   divider: 'Draggable divider',
   muteButton: 'Show "No more like this" on messages',
@@ -261,6 +263,7 @@ const ZH: Copy = {
   closed: '已收起 Agent Hub。',
   settingsOpened: '已打开 Agent Hub 设置。',
   language: '语言',
+  openOnStart: '会话开始时自动打开',
   autoOpen: '来任务时自动打开',
   divider: '可拖动分隔线',
   muteButton: '消息上显示「不再显示这类」',
