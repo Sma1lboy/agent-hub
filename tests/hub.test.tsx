@@ -3,7 +3,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine, MountTarget } from 'claude-code/testing'
 
 import type { Card, Task } from '../types'
-import { STALE_MS, cardKey, looksLikeSecret, newItems, replyKey, staleKeys } from '../hooks/hub'
+import { DEFAULT_SETTINGS, readSettings, STALE_MS, cardKey, looksLikeSecret, newItems, replyKey, staleKeys } from '../hooks/hub'
 
 // Agent Hub end to end against the engine's own test host: one session ("self")
 // plus other sessions seeded straight into the shared store.
@@ -13,6 +13,7 @@ const SURFACES = ['terminal', 'desktop'] as const
 
 type Calls = {
   submitted: string[]
+  focused: (boolean | undefined)[]
   opened: string[]
   status: (string | undefined)[]
   run: string[][]
@@ -30,7 +31,7 @@ type Opts = {
 }
 
 function stub(on: On, opts: Opts = {}) {
-  const calls: Calls = { submitted: [], opened: [], status: [], run: [], models: [], prompts: [], tools: [], commands: [] }
+  const calls: Calls = { submitted: [], focused: [], opened: [], status: [], run: [], models: [], prompts: [], tools: [], commands: [] }
   const clock = mock.clock(on, { now: NOW })
   // The shared store, as a map the test can read and other "sessions" can write.
   // Tests read the English copy; the settings test switches to Chinese itself.
@@ -68,6 +69,7 @@ function stub(on: On, opts: Opts = {}) {
   })
   on('ui.open', ($, e) => {
     calls.opened.push(e.id)
+    calls.focused.push(e.focus)
     return { value: { isPlaced: true } }
   })
   on('ui.log', () => ({ value: undefined }))
@@ -115,6 +117,35 @@ const otherCard = (over: Partial<Card> = {}): Card => ({
 
 const textOf = (found: unknown) => (found as { text?: string } | undefined)?.text
 
+
+test('joining opens the hub once without taking focus, even with task auto-open off', async ($, on) => {
+  const { calls, clock } = stub(on, { entries: { settings: { lang: 'en', autoOpen: false } } })
+  await start($)
+  expect(calls.opened).toEqual(['agent-hub'])
+  expect(calls.focused).toEqual([undefined])
+
+  // Closing a pane is engine-owned; subsequent hooks must not request another open.
+  const ui = await $.ui.mount(pane('desktop'))
+  await ui.unmount()
+  await clock.advance(6_000)
+  await $.turn.complete({ answer: 'Done' } as never)
+  await start($)
+  expect(calls.opened).toEqual(['agent-hub'])
+})
+
+test('openOnStart false leaves the hub closed on join and later polls', async ($, on) => {
+  const { calls, clock } = stub(on, { entries: { settings: { lang: 'en', openOnStart: false } } })
+  await start($)
+  await clock.advance(6_000)
+  expect(calls.opened).toEqual([])
+})
+
+test('old and missing settings default openOnStart to on', () => {
+  expect(DEFAULT_SETTINGS.openOnStart).toBe(true)
+  expect(readSettings(undefined).openOnStart).toBe(true)
+  expect(readSettings({ lang: 'en', autoOpen: false }).openOnStart).toBe(true)
+  expect(readSettings({ openOnStart: false }).openOnStart).toBe(false)
+})
 
 test('assign_task puts a task on the panel, on every surface', async ($, on) => {
   const { calls, store } = stub(on)
@@ -343,7 +374,7 @@ test('Mark all read hides every message at once', async ($, on) => {
 })
 
 test('in a plain terminal /hub toggles a band above the prompt instead of a pane', async ($, on) => {
-  const { calls } = stub(on, { surfaces: ['terminal'], entries: { [cardKey('other')]: otherCard() } })
+  const { calls } = stub(on, { surfaces: ['terminal'], entries: { settings: { lang: 'en', openOnStart: false }, [cardKey('other')]: otherCard() } })
   // What the engine draws in the band when the hub leaves it alone.
   on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine band'] }))
   await start($)
@@ -365,6 +396,22 @@ test('in a plain terminal /hub toggles a band above the prompt instead of a pane
   expect(await closed.find({ type: 'Text', text: 'Which region should prod use?' })).toBeUndefined()
 })
 
+test('terminal startup opens the band once and respects closing it', async ($, on) => {
+  const { calls, clock } = stub(on, { surfaces: ['terminal'] })
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine band'] }))
+  await start($)
+  const band = { plugin: 'agent-hub', surface: 'terminal', component: 'AbovePrompt', viewport: { columns: 100, rows: 40 }, props: { hasSurvey: false, isWorking: false, maxRows: 30, bodyColumns: 96, scroll: { offset: 0, bodyRows: 30 } } } as MountTarget<'terminal', 'AbovePrompt'>
+  const ui = await $.ui.mount(band)
+  expect(await ui.find({ type: 'Text', text: 'Nothing is waiting on you.' })).toBeDefined()
+  const result = await $.command.run({ command: 'hub', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } } as never)
+  expect(String(result.text)).toContain('closed')
+  await clock.advance(6_000)
+  await $.turn.complete({ answer: 'Done' } as never)
+  await ui.redraw()
+  expect(await ui.find({ type: 'Text', text: 'engine band' })).toBeDefined()
+  expect(calls.opened).toEqual([])
+})
+
 test('settings: language, auto-open and divider sync through the store', async ($, on) => {
   const { calls, clock, store } = stub(on, { entries: { [cardKey('other')]: otherCard({ tasks: [] }) } })
   await start($)
@@ -373,22 +420,28 @@ test('settings: language, auto-open and divider sync through the store', async (
 
   const settings = await $.ui.mount(pane('terminal', 'agent-hub-settings'))
   await settings.press({ key: 'lang-zh' })
-  expect(store.get('settings')).toEqual({ lang: 'zh', autoOpen: true, divider: false, muteButton: false, taskRows: 12 })
+  expect(store.get('settings')).toEqual({ lang: 'zh', openOnStart: true, autoOpen: true, divider: false, muteButton: false, taskRows: 12 })
   expect(await settings.find({ type: 'Text', text: '语言' })).toBeDefined()
   await settings.press({ key: 'toggle-autoOpen-off' })
   expect(((store.get('settings')) as { autoOpen: boolean }).autoOpen).toBe(false)
 
+  expect(await settings.find({ type: 'Text', text: '会话开始时自动打开' })).toBeDefined()
+  await settings.press({ key: 'toggle-openOnStart-off' })
+  expect((store.get('settings') as { openOnStart: boolean }).openOnStart).toBe(false)
+  await settings.press({ key: 'toggle-openOnStart-on' })
+  expect((store.get('settings') as { openOnStart: boolean }).openOnStart).toBe(true)
+
   // A task arriving from another session does not open the panel now.
   store.set(cardKey('other'), otherCard())
   await clock.advance(3_000)
-  expect(calls.opened.filter(id => id === 'agent-hub')).toEqual([])
+  expect(calls.opened.filter(id => id === 'agent-hub')).toEqual(['agent-hub'])
   const hub = await $.ui.mount(pane('desktop'))
   expect(await hub.find({ type: 'Text', text: /待办 1/ })).toBeDefined()
   expect(calls.status.at(-1)).toBe('1 个任务等你 · /hub')
 })
 
 test('a task from another session opens the panel when auto-open is on', async ($, on) => {
-  const { calls, clock, store } = stub(on)
+  const { calls, clock, store } = stub(on, { entries: { settings: { lang: 'en', openOnStart: false } } })
   await start($)
   expect(calls.opened).toEqual([])
   store.set(cardKey('other'), otherCard())
@@ -404,6 +457,10 @@ test('after /reload-plugins the first hook joins and registers everything', asyn
   expect(calls.tools).toEqual(['assign_task', 'withdraw_task', 'list_tasks'])
   expect(calls.commands).toEqual(['hub', 'hub-settings'])
   expect((store.get(cardKey('self'))) as Card).toBeDefined()
+  expect(calls.opened).toEqual(['agent-hub'])
+  expect(calls.focused).toEqual([undefined])
+  await ui.redraw()
+  expect(calls.opened).toEqual(['agent-hub'])
 })
 
 test('the system prompt gains the steering section, last', async ($, on) => {

@@ -67,8 +67,9 @@ Working on the mod itself? Add your clone as a local marketplace instead (`claud
 
 ## Use
 
+- The hub opens once when a session joins, without taking keyboard focus. Closing it keeps it closed on subsequent polls and turns; task-arrival auto-open remains a separate setting.
 - `/hub` opens the panel. In a plain terminal it is a band above the prompt, drawn on the terminal's own background, and `/hub` again folds it away; in the desktop app it is a pane.
-- `/hub-settings` opens the settings: language (中文 or English, default 中文), open the panel when a task arrives (default on), draggable divider between the two halves (default off), the "No more like this" button on messages (default off). Settings apply to every session on the machine.
+- `/hub-settings` opens the settings: language (中文 or English, default 中文), open on session start (default on), open the panel when a task arrives (default on), draggable divider between the two halves (default off), the "No more like this" button on messages (default off). Settings apply to every session on the machine.
 - The status line shows `N tasks need you · /hub`, counted across all sessions.
 
 ### Tasks

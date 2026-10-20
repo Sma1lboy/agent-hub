@@ -59,6 +59,7 @@ const PRUNE_EVERY_MS = 10 * 60_000
 const rt = {
   joining: undefined as Promise<void> | undefined,
   sid: '',
+  startHandled: false,
   hostId: undefined as string | undefined,
   seenTasks: undefined as Set<string> | undefined,
   toolsThisTurn: 0,
@@ -108,6 +109,13 @@ async function doJoin($: EngineInterface) {
   $.clock.every(POLL_MS, () => void poll($).catch(err => $.ui.log(`agent-hub: poll failed: ${String(err)}`, { to: 'debug' })))
   $.clock.every(HEARTBEAT_MS, () => void heartbeat($).catch(() => undefined))
   await poll($)
+  if (!rt.startHandled) {
+    // Decide once at join, including the lazy join after /reload-plugins.
+    // Polls and turns must not undo a user's close or a disabled startup setting.
+    const settings = await read($, settingsAtom)
+    rt.startHandled = true
+    if (settings.openOnStart) await showHub($, settings.lang, false)
+  }
 }
 
 /** Read-modify-write of this session's own card, one at a time. */
