@@ -1,11 +1,11 @@
-# Agent Hub
+# Standup
 
 <p align="center">
-  <img src="docs/assets/promo-zh.gif" alt="46 秒看懂 Agent Hub：同时跑 6 个 session，只有你能做的事进待办，回答送回派任务的 session，进展里列出每个项目做完了什么。" />
+  <img src="docs/assets/promo-zh.gif" alt="46 秒看懂 Standup：同时跑 6 个 session，只有你能做的事进待办，回答送回派任务的 session，进展里列出每个项目做完了什么。" />
 </p>
 
 <p align="center">
-  <a href="./.claude-plugin/plugin.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSma1lboy%2Fagent-hub%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&style=flat-square&color=c96442" alt="version" /></a>
+  <a href="./.claude-plugin/plugin.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSma1lboy%2Fclaude-standup%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&style=flat-square&color=c96442" alt="version" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license" /></a>
 </p>
 
@@ -44,7 +44,7 @@
 在终端里的 Claude Code 输入：
 
 ```
-/plugin install agent-hub --marketplace Sma1lboy/agent-hub
+/plugin install standup --marketplace Sma1lboy/claude-standup
 ```
 
 问是否添加 marketplace 时回 `y`，范围选 user（所有 session 都加载）。
@@ -52,17 +52,17 @@
 或者在 shell 里：
 
 ```bash
-claude plugin install agent-hub --marketplace Sma1lboy/agent-hub
+claude plugin install standup --marketplace Sma1lboy/claude-standup
 ```
 
-桌面 app 里 `/plugin` 用不了：点输入框旁边的 +，选 Plugins，Add marketplace 填 `Sma1lboy/agent-hub`，再 Add plugin。
+桌面 app 里 `/plugin` 用不了：点输入框旁边的 +，选 Plugins，Add marketplace 填 `Sma1lboy/claude-standup`，再 Add plugin。
 
 ## 用法
 
 - 每个 session 加入时自动打开一次，不抢键盘焦点。手动关闭后，轮询和后续回合不会重新打开；来任务时自动打开由单独的设置控制。
-- `/hub` 打开面板。纯终端里它是输入框上方的一块区域，直接用终端自己的背景(透明)，再输一次 `/hub` 收起；桌面 app 里是右侧面板。
-- `/hub-settings` 打开设置：语言（中文 / English，默认中文）、会话开始时自动打开（默认开）、来任务时自动打开面板（默认开）、待办和进展之间的可拖动分隔线（默认关）、消息上的「不再显示这类」按钮（默认关）。设置对本机所有 session 生效。
-- 状态栏显示 `N 个任务等你 · /hub`，是所有 session 加起来的待办数。
+- `/standup` 打开面板。纯终端里它是输入框上方的一块区域，直接用终端自己的背景(透明)，再输一次 `/standup` 收起；桌面 app 里是右侧面板。
+- `/standup-settings` 打开设置：语言（中文 / English，默认中文）、会话开始时自动打开（默认开）、来任务时自动打开面板（默认开）、待办和进展之间的可拖动分隔线（默认关）、消息上的「不再显示这类」按钮（默认关）。设置对本机所有 session 生效。
+- 状态栏显示 `N 个任务等你 · /standup`，是所有 session 加起来的待办数。
 
 ### 待办
 
@@ -85,7 +85,7 @@ Claude 遇到只有你能做的事，比如放密钥、在你的机器或账号�
 
 ### 进展
 
-某个 session 跑完一轮用过工具的对话后，Agent Hub 用 Haiku 读它的对话记录写一份总结，同一个 session 至少隔 5 分钟才写一次；Haiku 不可用时改用这个 session 自己的模型。新总结和上一份比，多出来的每一条成为一条消息。
+某个 session 跑完一轮用过工具的对话后，Standup 用 Haiku 读它的对话记录写一份总结，同一个 session 至少隔 5 分钟才写一次；Haiku 不可用时改用这个 session 自己的模型。新总结和上一份比，多出来的每一条成为一条消息。
 
 每条消息是一个成果，粒度是你跟同事一句话能说清的程度，比如「登录做好了」，而不是背后的提交和测试。读代码、回答问题、计划、做了一半的步骤、commit，都不算。Claude 依据已有授权（memory、CLAUDE.md、settings，或之前一句笼统的同意）没问你就做了的重要操作，比如合并、发版、部署，也会记一条，末尾写明依据哪条授权。
 

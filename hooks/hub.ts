@@ -1,9 +1,9 @@
 import type { Card, FeedItem, Lang, Mute, Reply, HubSettings, Snapshot, Summary, Task } from '../types'
 
-// The pure half of Agent Hub: store keys, the view model, the guards and the copy.
+// The pure half of Standup: store keys, the view model, the guards and the copy.
 
-export const HUB_PANE = 'agent-hub'
-export const SETTINGS_PANE = 'agent-hub-settings'
+export const HUB_PANE = 'standup'
+export const SETTINGS_PANE = 'standup-settings'
 
 export const POLL_MS = 3_000
 export const HEARTBEAT_MS = 60_000
@@ -211,8 +211,8 @@ export const shortHash = (s: string) => {
 // ---- copy ----
 
 const EN = {
-  title: 'Agent Hub',
-  settingsTitle: 'Agent Hub settings',
+  title: 'Standup',
+  settingsTitle: 'Standup settings',
   needsYou: 'To do',
   updates: 'Summary',
   nothingWaiting: 'Nothing is waiting on you.',
@@ -232,11 +232,11 @@ const EN = {
   kindDo: 'do',
   kindAnswer: 'answer',
   kindChoose: 'choose',
-  status: '{n} tasks need you · /hub',
-  status1: '1 task needs you · /hub',
-  opened: 'Agent Hub opened.',
-  closed: 'Agent Hub closed.',
-  settingsOpened: 'Agent Hub settings opened.',
+  status: '{n} tasks need you · /standup',
+  status1: '1 task needs you · /standup',
+  opened: 'Standup opened.',
+  closed: 'Standup closed.',
+  settingsOpened: 'Standup settings opened.',
   language: 'Language',
   openOnStart: 'Open on session start',
   autoOpen: 'Open when a task arrives',
@@ -252,8 +252,8 @@ const EN = {
 type Copy = typeof EN
 
 const ZH: Copy = {
-  title: 'Agent Hub',
-  settingsTitle: 'Agent Hub 设置',
+  title: 'Standup',
+  settingsTitle: 'Standup 设置',
   needsYou: '待办',
   updates: '进展',
   nothingWaiting: '没有等你处理的事。',
@@ -273,11 +273,11 @@ const ZH: Copy = {
   kindDo: '去做',
   kindAnswer: '回答',
   kindChoose: '选择',
-  status: '{n} 个任务等你 · /hub',
-  status1: '1 个任务等你 · /hub',
-  opened: '已打开 Agent Hub。',
-  closed: '已收起 Agent Hub。',
-  settingsOpened: '已打开 Agent Hub 设置。',
+  status: '{n} 个任务等你 · /standup',
+  status1: '1 个任务等你 · /standup',
+  opened: '已打开 Standup。',
+  closed: '已收起 Standup。',
+  settingsOpened: '已打开 Standup 设置。',
   language: '语言',
   openOnStart: '会话开始时自动打开',
   autoOpen: '来任务时自动打开',

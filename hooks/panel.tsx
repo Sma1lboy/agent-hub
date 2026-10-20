@@ -5,10 +5,10 @@ import type { HubSettings } from '../types'
 import { DEFAULT_SETTINGS, ago, feedRows, openTasks, pausedCards, t } from './hub'
 import type { CopyKey, FeedRow, OpenTask } from './hub'
 
-const snapAtom = atom({ plugin: 'agent-hub', key: 'snap' } as const, null)
-const settingsAtom = atom({ plugin: 'agent-hub', key: 'settings' } as const, DEFAULT_SETTINGS)
-const errorsAtom = atom({ plugin: 'agent-hub', key: 'errors' } as const, {})
-const showAllAtom = atom({ plugin: 'agent-hub', key: 'showAllTasks' } as const, false)
+const snapAtom = atom({ plugin: 'standup', key: 'snap' } as const, null)
+const settingsAtom = atom({ plugin: 'standup', key: 'settings' } as const, DEFAULT_SETTINGS)
+const errorsAtom = atom({ plugin: 'standup', key: 'errors' } as const, {})
+const showAllAtom = atom({ plugin: 'standup', key: 'showAllTasks' } as const, false)
 
 // Tasks shown before "+N more", so the summary below stays in view.
 const TASKS_SHOWN = 3

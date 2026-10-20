@@ -1,11 +1,11 @@
-# Agent Hub
+# Standup
 
 <p align="center">
-  <img src="docs/assets/promo-en.gif" alt="Agent Hub in 46 seconds: six sessions at once, tasks only you can do land in To do, an answer goes back to the session that asked, and the Summary lists what each project got done." />
+  <img src="docs/assets/promo-en.gif" alt="Standup in 46 seconds: six sessions at once, tasks only you can do land in To do, an answer goes back to the session that asked, and the Summary lists what each project got done." />
 </p>
 
 <p align="center">
-  <a href="./.claude-plugin/plugin.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSma1lboy%2Fagent-hub%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&style=flat-square&color=c96442" alt="version" /></a>
+  <a href="./.claude-plugin/plugin.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSma1lboy%2Fclaude-standup%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&style=flat-square&color=c96442" alt="version" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license" /></a>
 </p>
 
@@ -59,7 +59,7 @@ Needs Claude Code 2.1.299 or newer.
 At the prompt of a terminal session:
 
 ```
-/plugin install agent-hub --marketplace Sma1lboy/agent-hub
+/plugin install standup --marketplace Sma1lboy/claude-standup
 ```
 
 Answer `y` to add the marketplace, then pick a scope (user scope loads it in every session).
@@ -67,19 +67,19 @@ Answer `y` to add the marketplace, then pick a scope (user scope loads it in eve
 From a shell:
 
 ```bash
-claude plugin install agent-hub --marketplace Sma1lboy/agent-hub
+claude plugin install standup --marketplace Sma1lboy/claude-standup
 ```
 
-In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `Sma1lboy/agent-hub`, then Add plugin.
+In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `Sma1lboy/claude-standup`, then Add plugin.
 
-Working on the mod itself? Add your clone as a local marketplace instead (`claude plugin marketplace add <folder>`, then `claude plugin install agent-hub@agent-hub`); edits are then picked up by `/reload-plugins` with no reinstall.
+Working on the mod itself? Add your clone as a local marketplace instead (`claude plugin marketplace add <folder>`, then `claude plugin install standup@standup`); edits are then picked up by `/reload-plugins` with no reinstall.
 
 ## Use
 
 - The hub opens once when a session joins, without taking keyboard focus. Closing it keeps it closed on subsequent polls and turns; task-arrival auto-open remains a separate setting.
-- `/hub` opens the panel. In a plain terminal it is a band above the prompt, drawn on the terminal's own background, and `/hub` again folds it away; in the desktop app it is a pane.
-- `/hub-settings` opens the settings: language (中文 or English, default 中文), open on session start (default on), open the panel when a task arrives (default on), draggable divider between the two halves (default off), the "No more like this" button on messages (default off). Settings apply to every session on the machine.
-- The status line shows `N tasks need you · /hub`, counted across all sessions.
+- `/standup` opens the panel. In a plain terminal it is a band above the prompt, drawn on the terminal's own background, and `/standup` again folds it away; in the desktop app it is a pane.
+- `/standup-settings` opens the settings: language (中文 or English, default 中文), open on session start (default on), open the panel when a task arrives (default on), draggable divider between the two halves (default off), the "No more like this" button on messages (default off). Settings apply to every session on the machine.
+- The status line shows `N tasks need you · /standup`, counted across all sessions.
 
 ### Tasks
 
@@ -101,11 +101,11 @@ Guards:
 
 ### Summary
 
-After each turn that used tools, Agent Hub asks Haiku to summarize that session's transcript, at most once every 5 minutes per session. If Haiku is unavailable it uses the session's own model. The new summary is compared with the previous one, and each new line becomes its own message in the stream, newest first, labelled with its project:
+After each turn that used tools, Standup asks Haiku to summarize that session's transcript, at most once every 5 minutes per session. If Haiku is unavailable it uses the session's own model. The new summary is compared with the previous one, and each new line becomes its own message in the stream, newest first, labelled with its project:
 
 Every message is one outcome, marked ✓, at the level you would tell a teammate: "login works", not the commits and test runs behind it. Reading code, answering a question, a plan, a half-finished step or a commit never count. Consequential things Claude did without asking (a merge, a release, a deploy) because your memory, CLAUDE.md, settings or an earlier general yes covered it get a message too, with the permission named at the end.
 
-Messages stay after their session closes. **OK** hides a message in every session. **No more like this** (turn it on in `/hub-settings`) also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the Summary section says `<project>: Updates paused: <reason>`.
+Messages stay after their session closes. **OK** hides a message in every session. **No more like this** (turn it on in `/standup-settings`) also saves it as a mute: later summaries in every session skip things of that kind (the model judges what is similar). If summarizing fails, the Summary section says `<project>: Updates paused: <reason>`.
 
 **Open ↗** on a task switches the desktop app to the session that handed it out (`open claude://claude.ai/epitaxy/<id>`). Tasks from this session, and from sessions running in a plain terminal (which have no such id), show no Open. Summary messages have no Open.
 

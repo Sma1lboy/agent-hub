@@ -58,7 +58,7 @@ export type Snapshot = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'agent-hub': {
+    'standup': {
       snap: Snapshot | null
       settings: HubSettings
       errors: Record<string, string>

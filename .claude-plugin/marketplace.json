@@ -1,13 +1,13 @@
 {
-  "name": "agent-hub",
-  "description": "Agent Hub for Claude Code: one panel for every session on this machine.",
+  "name": "standup",
+  "description": "Standup for Claude Code: one panel for every session on this machine.",
   "owner": {
     "name": "Sma1lboy",
     "url": "https://github.com/Sma1lboy"
   },
   "plugins": [
     {
-      "name": "agent-hub",
+      "name": "standup",
       "source": "./",
       "description": "One panel for every Claude Code session on this machine: tasks agents hand you, and a feed of what they finished."
     }

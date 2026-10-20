@@ -203,7 +203,7 @@ const ASSIGN_CASES: AssignCase[] = [
 ]
 
 function sandbox(files: Record<string, string> = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'agent-hub-eval-'))
+  const dir = mkdtempSync(join(tmpdir(), 'standup-eval-'))
   for (const [path, text] of Object.entries(files)) {
     const full = join(dir, path)
     spawnSync('mkdir', ['-p', join(full, '..')])
@@ -218,7 +218,7 @@ function sandbox(files: Record<string, string> = {}) {
 
 function runAssign(c: AssignCase): Result {
   const dir = sandbox(c.files)
-  const allowed = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash(git:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'mcp__agent-hub__assign_task', 'mcp__agent-hub__withdraw_task', 'mcp__agent-hub__list_tasks']
+  const allowed = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash(git:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'mcp__standup__assign_task', 'mcp__standup__withdraw_task', 'mcp__standup__list_tasks']
   const stdout = claude(
     ['--model', 'opus', '--plugin-dir', ROOT, '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits', '--allowedTools', allowed.join(','), '--max-budget-usd', '1'],
     c.prompt,
@@ -235,7 +235,7 @@ function runAssign(c: AssignCase): Result {
       }
     })
     .filter(e => e !== undefined)
-  const calls = events.flatMap(e => (e.type === 'assistant' ? (e.message?.content ?? []) : [])).filter(b => b.type === 'tool_use' && b.name === 'mcp__agent-hub__assign_task')
+  const calls = events.flatMap(e => (e.type === 'assistant' ? (e.message?.content ?? []) : [])).filter(b => b.type === 'tool_use' && b.name === 'mcp__standup__assign_task')
   const final = events.find(e => e.type === 'result')
   const reply = final?.result ?? ''
   const usd = final?.total_cost_usd ?? 0

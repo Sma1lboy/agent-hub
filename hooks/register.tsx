@@ -43,15 +43,15 @@ import {
   WITHDRAW_SCHEMA,
 } from './steering'
 
-const snapAtom = atom({ plugin: 'agent-hub', key: 'snap' } as const, null)
-const settingsAtom = atom({ plugin: 'agent-hub', key: 'settings' } as const, DEFAULT_SETTINGS)
-const errorsAtom = atom({ plugin: 'agent-hub', key: 'errors' } as const, {})
-const bandAtom = atom({ plugin: 'agent-hub', key: 'bandOpen' } as const, false)
+const snapAtom = atom({ plugin: 'standup', key: 'snap' } as const, null)
+const settingsAtom = atom({ plugin: 'standup', key: 'settings' } as const, DEFAULT_SETTINGS)
+const errorsAtom = atom({ plugin: 'standup', key: 'errors' } as const, {})
+const bandAtom = atom({ plugin: 'standup', key: 'bandOpen' } as const, false)
 
 const TOOL = {
-  assign: 'mcp__agent-hub__assign_task',
-  withdraw: 'mcp__agent-hub__withdraw_task',
-  list: 'mcp__agent-hub__list_tasks',
+  assign: 'mcp__standup__assign_task',
+  withdraw: 'mcp__standup__withdraw_task',
+  list: 'mcp__standup__list_tasks',
 } as const
 
 const PRUNE_EVERY_MS = 10 * 60_000
@@ -100,14 +100,14 @@ async function doJoin($: EngineInterface) {
   await $.store.set(cardKey(rt.sid), card)
 
   await Promise.all([
-    $.command.register({ name: 'hub', description: 'Open Agent Hub: what every session needs from you, and what each finished', immediate: true }),
-    $.command.register({ name: 'hub-settings', description: 'Agent Hub settings: language, auto-open, divider', immediate: true }),
+    $.command.register({ name: 'standup', description: 'Open Standup: what every session needs from you, and what each finished', immediate: true }),
+    $.command.register({ name: 'standup-settings', description: 'Standup settings: language, auto-open, divider', immediate: true }),
     $.tool.register({ name: 'assign_task', description: ASSIGN_DESCRIPTION, inputSchema: ASSIGN_SCHEMA, isDeferred: false }),
     $.tool.register({ name: 'withdraw_task', description: WITHDRAW_DESCRIPTION, inputSchema: WITHDRAW_SCHEMA, isDeferred: false }),
     $.tool.register({ name: 'list_tasks', description: LIST_DESCRIPTION, inputSchema: { type: 'object', properties: {} }, isDeferred: false }),
   ])
 
-  $.clock.every(POLL_MS, () => void poll($).catch(err => $.ui.log(`agent-hub: poll failed: ${String(err)}`, { to: 'debug' })))
+  $.clock.every(POLL_MS, () => void poll($).catch(err => $.ui.log(`standup: poll failed: ${String(err)}`, { to: 'debug' })))
   $.clock.every(HEARTBEAT_MS, () => void heartbeat($).catch(() => undefined))
   await poll($)
   if (!rt.startHandled) {
@@ -164,7 +164,7 @@ async function poll($: EngineInterface) {
   const seen = snap.cards.map(c => c.sid).sort().join(',')
   if (seen !== rt.seenSessions) {
     rt.seenSessions = seen
-    $.ui.log(`agent-hub: sessions in the store: ${seen}`, { to: 'debug' })
+    $.ui.log(`standup: sessions in the store: ${seen}`, { to: 'debug' })
   }
   if (JSON.stringify(await read($, settingsAtom)) !== JSON.stringify(settings)) await update($, settingsAtom, () => settings)
   if (JSON.stringify(await read($, snapAtom)) !== JSON.stringify(snap)) await update($, snapAtom, () => snap)
@@ -278,10 +278,10 @@ async function sendReply($: EngineInterface, task: OpenTask, answer: string, ski
 }
 
 /**
- * In a plain terminal the hub is a band above the prompt: it draws on the terminal's own
+ * In a plain terminal the panel is a band above the prompt: it draws on the terminal's own
  * background, where a docked pane gets the engine's grey. Elsewhere it is a pane.
- * `toggle` (the /hub command) closes an open band; an arriving task only opens it.
- * Returns whether the hub is showing afterwards.
+ * `toggle` (the /standup command) closes an open band; an arriving task only opens it.
+ * Returns whether the panel is showing afterwards.
  */
 async function showHub($: EngineInterface, lang: HubSettings['lang'], toggle: boolean) {
   const surfaces = await $.session.surfaces()
@@ -304,17 +304,17 @@ export const register: Register = on => {
   on('prompt.compose', async ($, e, next) => {
     void join($).catch(() => undefined)
     const composed = await next(e)
-    return { sections: [...composed.sections, { id: 'agent-hub:steering', text: STEERING, scope: 'session' as const }] }
+    return { sections: [...composed.sections, { id: 'standup:steering', text: STEERING, scope: 'session' as const }] }
   })
 
-  on('command.run', { command: 'hub' }, async ($, e) => {
+  on('command.run', { command: 'standup' }, async ($, e) => {
     await join($)
     const { lang } = await read($, settingsAtom)
     const shown = await showHub($, lang, true)
     return { text: t(lang, shown ? 'opened' : 'closed') }
   })
 
-  on('command.run', { command: 'hub-settings' }, async ($, e) => {
+  on('command.run', { command: 'standup-settings' }, async ($, e) => {
     await join($)
     const { lang } = await read($, settingsAtom)
     await $.ui.open({ id: SETTINGS_PANE, title: t(lang, 'settingsTitle'), focus: true, closeOnEscape: true })
@@ -348,7 +348,7 @@ export const register: Register = on => {
     }
     await mutateCard($, c => ({ ...c, tasks: [...c.tasks, task] }))
     await poll($).catch(() => undefined)
-    return { result: `Assigned task ${task.id} to the user in Agent Hub. Do not wait or poll: carry on with work that does not need it, or end your turn. Their answer will arrive as a new message.` }
+    return { result: `Assigned task ${task.id} to the user in Standup. Do not wait or poll: carry on with work that does not need it, or end your turn. Their answer will arrive as a new message.` }
   })
 
   on('tool.call', { tool: TOOL.withdraw }, async ($, e) => {
@@ -387,7 +387,7 @@ export const register: Register = on => {
     if ('skip' in result && result.skip !== undefined) return result
     const card = (await $.store.get(cardKey(rt.sid))) as Card | undefined
     if (card?.tasks.length) {
-      const text = `[Agent Hub] Tasks you assigned to the user that are still open (answers arrive as messages):\n${card.tasks.map(taskLine).join('\n')}`
+      const text = `[Standup] Tasks you assigned to the user that are still open (answers arrive as messages):\n${card.tasks.map(taskLine).join('\n')}`
       await $.session.append({ message: { type: 'user', content: [{ type: 'text', text }] } })
     }
     return result
@@ -424,8 +424,8 @@ function taskLine(task: Task) {
 
 export function replyMessage(task: Task, reply: Reply) {
   if (reply.skipped) return `The user skipped task ${task.id} (${task.title}): no longer needed.`
-  if (task.kind === 'do') return `[Agent Hub] The user marked your task ${task.id} as done: "${task.title}".`
-  if (task.kind === 'choose') return `[Agent Hub] The user chose "${reply.answer}" for your task ${task.id}: "${task.title}".`
-  return `[Agent Hub] The user answered your task ${task.id} ("${task.title}"):\n${reply.answer}`
+  if (task.kind === 'do') return `[Standup] The user marked your task ${task.id} as done: "${task.title}".`
+  if (task.kind === 'choose') return `[Standup] The user chose "${reply.answer}" for your task ${task.id}: "${task.title}".`
+  return `[Standup] The user answered your task ${task.id} ("${task.title}"):\n${reply.answer}`
 }
 

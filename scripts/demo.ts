@@ -1,4 +1,4 @@
-// Fills the installed Agent Hub's store with five made-up sessions, after the author's own projects, for screenshots and demos.
+// Fills the installed Standup's store with five made-up sessions, after the author's own projects, for screenshots and demos.
 //   bun scripts/demo.ts          seed (tasks stay visible for 2 hours)
 //   bun scripts/demo.ts --clear  remove everything the demo wrote
 // Every key it writes belongs to a session id starting with "demo-".
@@ -10,9 +10,9 @@ import { join } from 'node:path'
 import type { Card, FeedItem, Task } from '../types'
 
 const DIR = join(homedir(), '.claude/plugins/store')
-const files = readdirSync(DIR).filter(f => f.startsWith('agent-hub_') && !f.includes('inline'))
+const files = readdirSync(DIR).filter(f => f.startsWith('standup_') && !f.includes('inline'))
 if (files.length !== 1) {
-  console.error(`expected one installed agent-hub store in ${DIR}, found: ${files.join(', ') || 'none'}`)
+  console.error(`expected one installed standup store in ${DIR}, found: ${files.join(', ') || 'none'}`)
   process.exit(1)
 }
 const path = join(DIR, files[0]!)
@@ -59,7 +59,7 @@ if (!process.argv.includes('--clear')) {
     card(
       'demo-site',
       'sma1lboy.me',
-      [task('t1', 'choose', 'Agent Hub 的仓库公开还是私有？', 4, { options: ['公开', '私有'] })],
+      [task('t1', 'choose', 'Standup 的仓库公开还是私有？', 4, { options: ['公开', '私有'] })],
       [item('demo-site', 'f1', 'milestone', '首页改版成 PHANTOM 风格，已经上线', 70)],
     ),
     card(
@@ -79,4 +79,4 @@ if (!process.argv.includes('--clear')) {
 }
 
 writeFileSync(path, `${JSON.stringify(store, null, 2)}\n`)
-console.log(process.argv.includes('--clear') ? `Removed the demo from ${path}` : `Seeded 5 demo sessions into ${path}. Open /hub; they show within 3 seconds.`)
+console.log(process.argv.includes('--clear') ? `Removed the demo from ${path}` : `Seeded 5 demo sessions into ${path}. Open /standup; they show within 3 seconds.`)

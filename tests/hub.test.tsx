@@ -5,7 +5,7 @@ import type { Engine, MountTarget } from 'claude-code/testing'
 import type { Card, Task } from '../types'
 import { DEFAULT_SETTINGS, readSettings, STALE_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys } from '../hooks/hub'
 
-// Agent Hub end to end against the engine's own test host: one session ("self")
+// Standup end to end against the engine's own test host: one session ("self")
 // plus other sessions seeded straight into the shared store.
 
 const NOW = 10_000_000
@@ -92,16 +92,16 @@ function stub(on: On, opts: Opts = {}) {
 
 const start = ($: Engine) => $.session.start({ cwd: '/work/alpha', surface: 'terminal', isInteractive: true })
 
-const assign = ($: Engine, input: Record<string, unknown>) => $.tool.call({ tool: 'mcp__agent-hub__assign_task', tool_use_id: `tu-${Math.random()}`, ...input } as never)
+const assign = ($: Engine, input: Record<string, unknown>) => $.tool.call({ tool: 'mcp__standup__assign_task', tool_use_id: `tu-${Math.random()}`, ...input } as never)
 
-const pane = <S extends (typeof SURFACES)[number]>(surface: S, requestId = 'agent-hub'): MountTarget<S, 'Pane'> =>
+const pane = <S extends (typeof SURFACES)[number]>(surface: S, requestId = 'standup'): MountTarget<S, 'Pane'> =>
   ({
-    plugin: 'agent-hub',
+    plugin: 'standup',
     surface,
     component: 'Pane',
     requestId,
     viewport: { columns: 90, rows: 40 },
-    props: { title: 'Agent Hub', isFocused: true, bodyColumns: 88, placement: 'dock', scroll: { offset: 0, bodyRows: 40 } },
+    props: { title: 'Standup', isFocused: true, bodyColumns: 88, placement: 'dock', scroll: { offset: 0, bodyRows: 40 } },
   }) as MountTarget<S, 'Pane'>
 
 const otherCard = (over: Partial<Card> = {}): Card => ({
@@ -121,7 +121,7 @@ const textOf = (found: unknown) => (found as { text?: string } | undefined)?.tex
 test('joining opens the hub once without taking focus, even with task auto-open off', async ($, on) => {
   const { calls, clock } = stub(on, { entries: { settings: { lang: 'en', autoOpen: false } } })
   await start($)
-  expect(calls.opened).toEqual(['agent-hub'])
+  expect(calls.opened).toEqual(['standup'])
   expect(calls.focused).toEqual([undefined])
 
   // Closing a pane is engine-owned; subsequent hooks must not request another open.
@@ -130,7 +130,7 @@ test('joining opens the hub once without taking focus, even with task auto-open 
   await clock.advance(6_000)
   await $.turn.complete({ answer: 'Done' } as never)
   await start($)
-  expect(calls.opened).toEqual(['agent-hub'])
+  expect(calls.opened).toEqual(['standup'])
 })
 
 test('openOnStart false leaves the hub closed on join and later polls', async ($, on) => {
@@ -151,7 +151,7 @@ test('assign_task puts a task on the panel, on every surface', async ($, on) => 
   const { calls, store } = stub(on)
   await start($)
   expect(calls.tools).toEqual(['assign_task', 'withdraw_task', 'list_tasks'])
-  expect(calls.commands).toEqual(['hub', 'hub-settings'])
+  expect(calls.commands).toEqual(['standup', 'standup-settings'])
 
   const res = await assign($, { kind: 'do', title: 'Add STRIPE_KEY to .env.local', detail: 'The test key from the Stripe dashboard.' })
   expect(String(res.result)).toContain('Assigned task')
@@ -164,7 +164,7 @@ test('assign_task puts a task on the panel, on every surface', async ($, on) => 
     expect(await ui.find({ type: 'Text', text: /To do 1/ })).toBeDefined()
     await ui.unmount()
   }
-  expect(calls.status.at(-1)).toBe('1 task needs you · /hub')
+  expect(calls.status.at(-1)).toBe('1 task needs you · /standup')
 })
 
 test('assign_task refuses bad input, duplicates and a sixth open task', async ($, on) => {
@@ -189,11 +189,11 @@ test('withdraw_task and list_tasks', async ($, on) => {
   const card = (store.get(cardKey('self'))) as Card
   const id = card.tasks[0]!.id
 
-  const listed = await $.tool.call({ tool: 'mcp__agent-hub__list_tasks', tool_use_id: 'l1' } as never)
+  const listed = await $.tool.call({ tool: 'mcp__standup__list_tasks', tool_use_id: 'l1' } as never)
   expect(String(listed.result)).toContain('Postgres / SQLite')
 
-  expect((await $.tool.call({ tool: 'mcp__agent-hub__withdraw_task', tool_use_id: 'w0', id: 'nope' } as never)).deny).toContain('No open task')
-  const res = await $.tool.call({ tool: 'mcp__agent-hub__withdraw_task', tool_use_id: 'w1', id } as never)
+  expect((await $.tool.call({ tool: 'mcp__standup__withdraw_task', tool_use_id: 'w0', id: 'nope' } as never)).deny).toContain('No open task')
+  const res = await $.tool.call({ tool: 'mcp__standup__withdraw_task', tool_use_id: 'w1', id } as never)
   expect(String(res.result)).toContain(`Withdrew task ${id}`)
   expect(((store.get(cardKey('self'))) as Card).tasks).toEqual([])
 })
@@ -270,9 +270,9 @@ for (const kind of ['do', 'choose', 'answer'] as const) {
     } })
     await start($)
     const answered = {
-      do: '[Agent Hub] The user marked your task old as done: "Old reply task".',
-      choose: '[Agent Hub] The user chose "A" for your task old: "Old reply task".',
-      answer: '[Agent Hub] The user answered your task old ("Old reply task"):\nA',
+      do: '[Standup] The user marked your task old as done: "Old reply task".',
+      choose: '[Standup] The user chose "A" for your task old: "Old reply task".',
+      answer: '[Standup] The user answered your task old ("Old reply task"):\nA',
     }[kind]
     expect([...calls.submitted].sort()).toEqual([answered, 'The user skipped task new (Skipped task): no longer needed.'].sort())
     expect(store.get(replyKey('self', 'old'))).toBeUndefined()
@@ -311,7 +311,7 @@ test('a reply for this session reaches the model as a prompt, once', async ($, o
   const mine: Card = { ...otherCard({ sid: 'self', name: 'alpha', hostId: undefined }), tasks: [task] }
   const { calls, clock, store } = stub(on, { entries: { [cardKey('self')]: mine, [replyKey('self', 'tq')]: { answer: 'SQLite', at: NOW, by: 'other' } } })
   await start($)
-  expect(calls.submitted).toEqual(['[Agent Hub] The user chose "SQLite" for your task tq: "Which database?".'])
+  expect(calls.submitted).toEqual(['[Standup] The user chose "SQLite" for your task tq: "Which database?".'])
   expect(store.get(replyKey('self', 'tq'))).toBeUndefined()
   expect(((store.get(cardKey('self'))) as Card).tasks).toEqual([])
   await clock.advance(10_000)
@@ -326,7 +326,7 @@ test('Done on a do-task sends a done message', async ($, on) => {
   const ui = await $.ui.mount(pane('terminal'))
   await ui.press({ key: `done-self:${id}` })
   await clock.advance(3_000)
-  expect(calls.submitted).toEqual([`[Agent Hub] The user marked your task ${id} as done: "Approve the App Store build".`])
+  expect(calls.submitted).toEqual([`[Standup] The user marked your task ${id} as done: "Approve the App Store build".`])
 })
 
 test("a session gone quiet loses its tasks from the panel but keeps its updates", async ($, on) => {
@@ -418,7 +418,7 @@ test('OK hides a message everywhere; No more like this, once turned on in settin
 
   // Off by default: the button appears only after the setting is turned on.
   expect(await ui.find({ key: 'mute-other:f1' })).toBeUndefined()
-  const settings = await $.ui.mount(pane('terminal', 'agent-hub-settings'))
+  const settings = await $.ui.mount(pane('terminal', 'standup-settings'))
   await settings.press({ key: 'toggle-muteButton-on' })
   await ui.press({ key: 'mute-other:f1' })
   expect(store.get('mute:other:f1')).toEqual({ text: 'Bumped lodash', at: NOW })
@@ -440,13 +440,13 @@ test('Mark all read hides every message at once', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /Outcome/ })).toBeUndefined()
 })
 
-test('in a plain terminal /hub toggles a band above the prompt instead of a pane', async ($, on) => {
+test('in a plain terminal /standup toggles a band above the prompt instead of a pane', async ($, on) => {
   const { calls } = stub(on, { surfaces: ['terminal'], entries: { settings: { lang: 'en', openOnStart: false }, [cardKey('other')]: otherCard() } })
-  // What the engine draws in the band when the hub leaves it alone.
+  // What the engine draws in the band when the panel leaves it alone.
   on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine band'] }))
   await start($)
-  const band = { plugin: 'agent-hub', surface: 'terminal', component: 'AbovePrompt', viewport: { columns: 100, rows: 40 }, props: { hasSurvey: false, isWorking: false, maxRows: 30, bodyColumns: 96, scroll: { offset: 0, bodyRows: 30 } } } as MountTarget<'terminal', 'AbovePrompt'>
-  const run = () => $.command.run({ command: 'hub', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } } as never)
+  const band = { plugin: 'standup', surface: 'terminal', component: 'AbovePrompt', viewport: { columns: 100, rows: 40 }, props: { hasSurvey: false, isWorking: false, maxRows: 30, bodyColumns: 96, scroll: { offset: 0, bodyRows: 30 } } } as MountTarget<'terminal', 'AbovePrompt'>
+  const run = () => $.command.run({ command: 'standup', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } } as never)
 
   const closedBefore = await $.ui.mount(band)
   expect(await closedBefore.find({ type: 'Text', text: 'Which region should prod use?' })).toBeUndefined()
@@ -467,10 +467,10 @@ test('terminal startup opens the band once and respects closing it', async ($, o
   const { calls, clock } = stub(on, { surfaces: ['terminal'] })
   on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine band'] }))
   await start($)
-  const band = { plugin: 'agent-hub', surface: 'terminal', component: 'AbovePrompt', viewport: { columns: 100, rows: 40 }, props: { hasSurvey: false, isWorking: false, maxRows: 30, bodyColumns: 96, scroll: { offset: 0, bodyRows: 30 } } } as MountTarget<'terminal', 'AbovePrompt'>
+  const band = { plugin: 'standup', surface: 'terminal', component: 'AbovePrompt', viewport: { columns: 100, rows: 40 }, props: { hasSurvey: false, isWorking: false, maxRows: 30, bodyColumns: 96, scroll: { offset: 0, bodyRows: 30 } } } as MountTarget<'terminal', 'AbovePrompt'>
   const ui = await $.ui.mount(band)
   expect(await ui.find({ type: 'Text', text: 'Nothing is waiting on you.' })).toBeDefined()
-  const result = await $.command.run({ command: 'hub', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } } as never)
+  const result = await $.command.run({ command: 'standup', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } } as never)
   expect(String(result.text)).toContain('closed')
   await clock.advance(6_000)
   await $.turn.complete({ answer: 'Done' } as never)
@@ -482,10 +482,10 @@ test('terminal startup opens the band once and respects closing it', async ($, o
 test('settings: language, auto-open and divider sync through the store', async ($, on) => {
   const { calls, clock, store } = stub(on, { entries: { [cardKey('other')]: otherCard({ tasks: [] }) } })
   await start($)
-  await $.command.run({ command: 'hub-settings', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 100 } } as never)
-  expect(calls.opened).toContain('agent-hub-settings')
+  await $.command.run({ command: 'standup-settings', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 100 } } as never)
+  expect(calls.opened).toContain('standup-settings')
 
-  const settings = await $.ui.mount(pane('terminal', 'agent-hub-settings'))
+  const settings = await $.ui.mount(pane('terminal', 'standup-settings'))
   await settings.press({ key: 'lang-zh' })
   expect(store.get('settings')).toEqual({ lang: 'zh', openOnStart: true, autoOpen: true, divider: false, muteButton: false, taskRows: 12 })
   expect(await settings.find({ type: 'Text', text: '语言' })).toBeDefined()
@@ -501,10 +501,10 @@ test('settings: language, auto-open and divider sync through the store', async (
   // A task arriving from another session does not open the panel now.
   store.set(cardKey('other'), otherCard())
   await clock.advance(3_000)
-  expect(calls.opened.filter(id => id === 'agent-hub')).toEqual(['agent-hub'])
+  expect(calls.opened.filter(id => id === 'standup')).toEqual(['standup'])
   const hub = await $.ui.mount(pane('desktop'))
   expect(await hub.find({ type: 'Text', text: /待办 1/ })).toBeDefined()
-  expect(calls.status.at(-1)).toBe('1 个任务等你 · /hub')
+  expect(calls.status.at(-1)).toBe('1 个任务等你 · /standup')
 })
 
 test('a task from another session opens the panel when auto-open is on', async ($, on) => {
@@ -513,7 +513,7 @@ test('a task from another session opens the panel when auto-open is on', async (
   expect(calls.opened).toEqual([])
   store.set(cardKey('other'), otherCard())
   await clock.advance(3_000)
-  expect(calls.opened).toEqual(['agent-hub'])
+  expect(calls.opened).toEqual(['standup'])
 })
 
 test('after /reload-plugins the first hook joins and registers everything', async ($, on) => {
@@ -522,19 +522,19 @@ test('after /reload-plugins the first hook joins and registers everything', asyn
   const ui = await $.ui.mount(pane('terminal'))
   await ui.redraw()
   expect(calls.tools).toEqual(['assign_task', 'withdraw_task', 'list_tasks'])
-  expect(calls.commands).toEqual(['hub', 'hub-settings'])
+  expect(calls.commands).toEqual(['standup', 'standup-settings'])
   expect((store.get(cardKey('self'))) as Card).toBeDefined()
-  expect(calls.opened).toEqual(['agent-hub'])
+  expect(calls.opened).toEqual(['standup'])
   expect(calls.focused).toEqual([undefined])
   await ui.redraw()
-  expect(calls.opened).toEqual(['agent-hub'])
+  expect(calls.opened).toEqual(['standup'])
 })
 
 test('the system prompt gains the steering section, last', async ($, on) => {
   const { store } = stub(on)
   on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'You are Claude Code.', scope: 'shared' as const }] }))
   const out = await $.prompt.compose({ model: 'claude-opus-5-5', promptModel: 'claude-opus-5-5', surfaces: ['terminal'], tools: [], outputStyle: null, traits: [] })
-  expect(out.sections.map(s => s.id)).toEqual(['intro', 'agent-hub:steering'])
+  expect(out.sections.map(s => s.id)).toEqual(['intro', 'standup:steering'])
   expect(out.sections.at(-1)!.text).toContain('assign_task')
 })
 

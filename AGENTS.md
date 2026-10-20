@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Agent Hub is a Claude Code mod. Users install it straight from `main`, so whatever merges reaches every user on their next update.
+Standup is a Claude Code mod. Users install it straight from `main`, so whatever merges reaches every user on their next update.
 
 ## Checks
 
