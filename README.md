@@ -13,45 +13,6 @@
 
 A Claude Code mod that puts every session on your machine into one panel. The top half, To do, lists what each agent is waiting on you for. The bottom half, Summary, is a stream of what the agents got done: one card per message, newest first, each naming the project it came from.
 
-```
-To do 2
-╭─────────────────────────────────────╮
-│ payments-api · do · 4m       Open ↗ │
-│ Add STRIPE_SECRET_KEY to .env.local │
-│ Use the test-mode secret key from   │
-│ dashboard.stripe.com → Developers…  │
-│ [ Done ]                            │
-╰─────────────────────────────────────╯
-╭─────────────────────────────────────╮
-│ payments-api · choose · 1m   Open ↗ │
-│ Retry failed webhooks how many      │
-│ times?                              │
-│ [ 3 times ]                         │
-│ [ 5 times ]                         │
-│ [ Never, alert instead ]            │
-╰─────────────────────────────────────╯
-
-Summary 3
-╭─────────────────────────────────────╮
-│ ✓ Merged MR !128 (memory: may merge │
-│   my own MRs once CI is green)      │
-│ payments-api · 2m                   │
-│ OK                                  │
-╰─────────────────────────────────────╯
-╭─────────────────────────────────────╮
-│ ✓ Crash on launch for iOS 17 fixed; │
-│   repro test added                  │
-│ ios-client · 15m                    │
-│ OK                                  │
-╰─────────────────────────────────────╯
-╭─────────────────────────────────────╮
-│ ✓ Checkout flow works end to end;   │
-│   31 tests pass                     │
-│ payments-api · 18m                  │
-│ OK                                  │
-╰─────────────────────────────────────╯
-```
-
 ## Install
 
 Needs Claude Code 2.1.299 or newer.
