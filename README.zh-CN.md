@@ -1,31 +1,40 @@
 # Agent Hub
 
-[English](README.md)
+<p align="center">
+  <img src="docs/assets/promo-zh.gif" alt="46 秒看懂 Agent Hub：同时跑 6 个 session，只有你能做的事进待办，回答送回派任务的 session，进展里列出每个项目做完了什么。" />
+</p>
+
+<p align="center">
+  <a href="./.claude-plugin/plugin.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSma1lboy%2Fagent-hub%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&style=flat-square&color=c96442" alt="version" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license" /></a>
+</p>
+
+<p align="center"><a href="README.md">English</a></p>
 
 一个 Claude Code mod：把本机所有 session 汇到一个面板里。上半部分「待办」是各个 agent 等你处理的事，下半部分「进展」是它们做完的事，一条一条按时间倒序排，每条标明来自哪个项目。
 
 ```
 待办 3
 ╭─────────────────────────────────────╮
-│ codefox · 去做 · 9 分钟       跳转 ↗ │
+│ notes-app · 去做 · 9 分钟     跳转 ↗ │
 │ 在 Vercel 上配好 ANTHROPIC_API_KEY   │
 │ 远端 agent 的预览环境要用，没有它会  │
 │ 直接返回 401。                       │
 │                              [ 完成 ]│
 ╰─────────────────────────────────────╯
 ╭─────────────────────────────────────╮
-│ rove · 选择 · 2 分钟          跳转 ↗ │
+│ taskflow · 选择 · 2 分钟      跳转 ↗ │
 │ 0.10 先发 Homebrew 还是 npm？        │
 │      [ Homebrew ] [ npm ] [ 两个一起 ]│
 ╰─────────────────────────────────────╯
 
 进展 3                          全部已读
-✓ 换装试穿全链路跑通了
-  fitting-room · 3 分钟               OK
-✓ 发布了 0.9.232（CLAUDE.md：测试全绿可直接发版）
-  rove · 4 分钟                       OK
+✓ 下单支付全链路跑通了
+  shop-app · 3 分钟                   OK
+✓ 发布了 2.4.0（CLAUDE.md：测试全绿可直接发版）
+  taskflow · 4 分钟                   OK
 ✓ 本地 agent 可以直接操作远端项目了
-  codefox · 12 分钟                   OK
+  notes-app · 12 分钟                 OK
 ```
 
 ## 安装

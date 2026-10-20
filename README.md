@@ -1,6 +1,15 @@
 # Agent Hub
 
-[中文说明](README.zh-CN.md)
+<p align="center">
+  <img src="docs/assets/promo-en.gif" alt="Agent Hub in 46 seconds: six sessions at once, tasks only you can do land in To do, an answer goes back to the session that asked, and the Summary lists what each project got done." />
+</p>
+
+<p align="center">
+  <a href="./.claude-plugin/plugin.json"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSma1lboy%2Fagent-hub%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&style=flat-square&color=c96442" alt="version" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license" /></a>
+</p>
+
+<p align="center"><a href="README.zh-CN.md">中文说明</a></p>
 
 A Claude Code mod that puts every session on your machine into one panel. The top half, To do, lists what each agent is waiting on you for. The bottom half, Summary, is a stream of what the agents got done: one card per message, newest first, each naming the project it came from.
 
