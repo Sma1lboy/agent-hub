@@ -214,6 +214,50 @@ test("answering another session's task writes its reply key and hides the task",
   expect(await ui.find({ type: 'Text', text: /Nothing is waiting/ })).toBeDefined()
 })
 
+for (const surface of SURFACES) {
+  for (const kind of ['do', 'choose', 'answer'] as const) {
+    test(`Skip on ${surface} hides another session's ${kind} task everywhere`, async ($, on) => {
+      const task: Task = { id: 't1', kind, title: 'No longer needed task', options: kind === 'choose' ? ['A', 'B'] : undefined, createdAt: NOW }
+      const { calls, store } = stub(on, { entries: { [cardKey('other')]: otherCard({ tasks: [task] }) } })
+      await start($)
+      const ui = await $.ui.mount(pane(surface))
+      await ui.press({ key: 'skip-other:t1' })
+      expect(store.get(replyKey('other', 't1'))).toEqual({ answer: 'no longer needed', at: NOW, by: 'self', skipped: true })
+      expect(calls.submitted).toEqual([])
+      expect(await ui.find({ type: 'Text', text: task.title })).toBeUndefined()
+      await ui.unmount()
+      for (const target of SURFACES) {
+        const panel = await $.ui.mount(pane(target))
+        expect(await panel.find({ type: 'Text', text: task.title })).toBeUndefined()
+        await panel.unmount()
+      }
+      // Only the owner changes its card; the shared reply hides it meanwhile.
+      expect((store.get(cardKey('other')) as Card).tasks).toEqual([task])
+    })
+  }
+}
+
+for (const kind of ['do', 'choose', 'answer'] as const) {
+  test(`a skip from another session delivers the skipped line for a ${kind} task once`, async ($, on) => {
+    const task: Task = { id: 't1', kind, title: 'No longer needed task', createdAt: NOW }
+    const { calls, clock, store } = stub(on, { entries: {
+      [cardKey('self')]: otherCard({ sid: 'self', tasks: [task] }),
+      [replyKey('self', 't1')]: { answer: 'no longer needed', at: NOW, by: 'other', skipped: true },
+    } })
+    await start($)
+    expect(calls.submitted).toEqual(['The user skipped task t1 (No longer needed task): no longer needed.'])
+    expect(store.get(replyKey('self', 't1'))).toBeUndefined()
+    expect((store.get(cardKey('self')) as Card).tasks).toEqual([])
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount(pane(surface))
+      expect(await ui.find({ type: 'Text', text: task.title })).toBeUndefined()
+      await ui.unmount()
+    }
+    await clock.advance(10_000)
+    expect(calls.submitted).toHaveLength(1)
+  })
+}
+
 test('past three tasks the rest fold into "+N more", so the summary stays in view', async ($, on) => {
   const tasks = [1, 2, 3, 4, 5].map(i => ({ id: `t${i}`, kind: 'do' as const, title: `Task number ${i}`, createdAt: NOW - 1000 + i }))
   stub(on, { entries: { [cardKey('other')]: otherCard({ tasks }) } })

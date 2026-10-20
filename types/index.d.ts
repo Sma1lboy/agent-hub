@@ -38,7 +38,7 @@ export type Card = {
 export type Summary = { milestones: string[]; authorized: string[] }
 
 /** `reply:<session>:<task>`: written by whichever session answered. */
-export type Reply = { answer: string; at: number; by: string }
+export type Reply = { answer: string; at: number; by: string; skipped?: true }
 
 /** `mute:<feed id>`: a "no more like this". */
 export type Mute = { text: string; at: number }

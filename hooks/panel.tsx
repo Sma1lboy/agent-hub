@@ -18,6 +18,7 @@ const TASKS_SHOWN = 3
 
 export type Actions = {
   complete: (task: OpenTask) => Promise<void>
+  skip: (task: OpenTask) => Promise<void>
   answer: (task: OpenTask, text: string) => Promise<void>
   choose: (task: OpenTask, option: string) => Promise<void>
   ack: (row: FeedRow) => Promise<void>
@@ -119,6 +120,9 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
             <Input key={`ans-${key}`} placeholder={tx('answerPlaceholder')} submitLabel={tx('send')} onSubmit={(value: string) => (value.trim() ? act.answer(task, value) : undefined)} />
           </Box>
         ) : null}
+        <Box flexDirection="row" justifyContent={actionsAlign}>
+          <Button key={`skip-${key}`} plain dimColor label={tx('skip')} onPress={() => act.skip(task)} />
+        </Box>
         {errors[key] ? <Text color="error">{errors[key]}</Text> : null}
       </Box>
     )
