@@ -258,6 +258,29 @@ for (const kind of ['do', 'choose', 'answer'] as const) {
   })
 }
 
+// `skipped` is optional on `reply:`, so replies stored before Skip existed keep their meaning.
+for (const kind of ['do', 'choose', 'answer'] as const) {
+  test(`an old-shape reply still delivers as an answer and a new skip as a skip for a ${kind} task`, async ($, on) => {
+    const old: Task = { id: 'old', kind, title: 'Old reply task', options: kind === 'choose' ? ['A', 'B'] : undefined, createdAt: NOW }
+    const skip: Task = { id: 'new', kind, title: 'Skipped task', options: kind === 'choose' ? ['A', 'B'] : undefined, createdAt: NOW }
+    const { calls, store } = stub(on, { entries: {
+      [cardKey('self')]: otherCard({ sid: 'self', tasks: [old, skip] }),
+      [replyKey('self', 'old')]: { answer: 'A', at: NOW, by: 'other' },
+      [replyKey('self', 'new')]: { answer: 'no longer needed', at: NOW, by: 'other', skipped: true },
+    } })
+    await start($)
+    const answered = {
+      do: '[Agent Hub] The user marked your task old as done: "Old reply task".',
+      choose: '[Agent Hub] The user chose "A" for your task old: "Old reply task".',
+      answer: '[Agent Hub] The user answered your task old ("Old reply task"):\nA',
+    }[kind]
+    expect([...calls.submitted].sort()).toEqual([answered, 'The user skipped task new (Skipped task): no longer needed.'].sort())
+    expect(store.get(replyKey('self', 'old'))).toBeUndefined()
+    expect(store.get(replyKey('self', 'new'))).toBeUndefined()
+    expect((store.get(cardKey('self')) as Card).tasks).toEqual([])
+  })
+}
+
 test('past three tasks the rest fold into "+N more", so the summary stays in view', async ($, on) => {
   const tasks = [1, 2, 3, 4, 5].map(i => ({ id: `t${i}`, kind: 'do' as const, title: `Task number ${i}`, createdAt: NOW - 1000 + i }))
   stub(on, { entries: { [cardKey('other')]: otherCard({ tasks }) } })
