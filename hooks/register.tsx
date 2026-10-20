@@ -233,6 +233,7 @@ async function summarize($: EngineInterface, card: Card, snap: Snapshot) {
 export function actions($: EngineInterface): Actions {
   return {
     complete: task => sendReply($, task, ''),
+    skip: task => sendReply($, task, 'no longer needed', true),
     answer: async (task, text) => {
       const key = `${task.sid}:${task.id}`
       if (looksLikeSecret(text)) {
@@ -270,8 +271,8 @@ export function actions($: EngineInterface): Actions {
   }
 }
 
-async function sendReply($: EngineInterface, task: OpenTask, answer: string) {
-  const value: Reply = { answer, at: await $.clock.now(), by: rt.sid }
+async function sendReply($: EngineInterface, task: OpenTask, answer: string, skipped?: true) {
+  const value: Reply = { answer, at: await $.clock.now(), by: rt.sid, ...(skipped ? { skipped } : {}) }
   await $.store.set(replyKey(task.sid, task.id), value)
   await poll($)
 }
@@ -422,6 +423,7 @@ function taskLine(task: Task) {
 }
 
 export function replyMessage(task: Task, reply: Reply) {
+  if (reply.skipped) return `The user skipped task ${task.id} (${task.title}): no longer needed.`
   if (task.kind === 'do') return `[Agent Hub] The user marked your task ${task.id} as done: "${task.title}".`
   if (task.kind === 'choose') return `[Agent Hub] The user chose "${reply.answer}" for your task ${task.id}: "${task.title}".`
   return `[Agent Hub] The user answered your task ${task.id} ("${task.title}"):\n${reply.answer}`
