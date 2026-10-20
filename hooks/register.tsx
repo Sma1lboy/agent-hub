@@ -15,13 +15,16 @@ import {
   ackKey,
   cardKey,
   duplicateOf,
+  feedGapPassed,
   looksLikeSecret,
+  overlapsFeed,
   muteKey,
   newItems,
   openTasks,
   parseSummary,
   readSettings,
   readSummary,
+  recentFeed,
   replyKey,
   shortHash,
   snapshotOf,
@@ -32,6 +35,7 @@ import {
   transcriptText,
 } from './hub'
 import type { FeedRow, OpenTask } from './hub'
+import { withFeedClaim } from './feed-claim'
 import { renderHub, renderSettings } from './panel'
 import type { Actions } from './panel'
 import {
@@ -123,11 +127,11 @@ async function doJoin($: EngineInterface) {
 }
 
 /** Read-modify-write of this session's own card, one at a time. */
-function mutateCard($: EngineInterface, fn: (card: Card) => Card) {
+function mutateCard($: EngineInterface, fn: (card: Card) => Card | Promise<Card>) {
   const run = rt.writes.then(async () => {
     const card = (await $.store.get(cardKey(rt.sid))) as Card | undefined
     if (!card) return
-    await $.store.set(cardKey(rt.sid), fn(card))
+    await $.store.set(cardKey(rt.sid), await fn(card))
   })
   rt.writes = run.catch(() => undefined)
   return run
@@ -181,7 +185,7 @@ async function poll($: EngineInterface) {
   if (arrived && settings.autoOpen) void showHub($, settings.lang, false).catch(() => undefined)
 
   const card = snap.cards.find(c => c.sid === rt.sid)
-  if (rt.summaryDue && !rt.summarizing && card && now - (card.summaryAt ?? 0) >= SUMMARY_GAP_MS) {
+  if (rt.summaryDue && !rt.summarizing && card && now - (card.summaryAt ?? 0) >= SUMMARY_GAP_MS && feedGapPassed(snap.cards, now)) {
     rt.summaryDue = false
     rt.summarizing = true
     void summarize($, card, snap)
@@ -222,7 +226,7 @@ async function deliver($: EngineInterface, ids: readonly string[]) {
 async function summarize($: EngineInterface, card: Card, snap: Snapshot) {
   const rows = await $.session.messages()
   const prev = readSummary(card.summary)
-  const prompt = summaryPrompt(transcriptText(rows), prev, snap.mutes)
+  const prompt = summaryPrompt(transcriptText(rows), prev, snap.mutes, recentFeed(snap.cards))
   const ask = (model: string) => $.model.complete({ model, prompt, maxTokens: 1500, effort: 'low', timeoutMs: 90_000 })
   let reply = await ask('haiku')
   if (!reply.isAnswered && reply.reason === 'api-error') reply = await ask(await $.session.model())
@@ -240,8 +244,29 @@ async function summarize($: EngineInterface, card: Card, snap: Snapshot) {
   }
   const fresh = newItems(prev, summary)
   const item = (kind: FeedItem['kind'], text: string): FeedItem => ({ id: `${rt.sid}:${shortHash(kind + text + now)}`, kind, text, at: now })
-  const added = [...fresh.milestones.map(s => item('milestone', s)), ...fresh.authorized.map(s => item('authorized', s))]
-  await mutateCard($, c => ({ ...c, summary, summaryAt: now, paused: undefined, feed: [...c.feed, ...added].slice(-MAX_FEED) }))
+  const candidates = [...fresh.milestones.map(s => item('milestone', s)), ...fresh.authorized.map(s => item('authorized', s))]
+  const claimed = await withFeedClaim($, rt.sid, async valid => {
+    // Another session may have published while the model was answering.
+    const current = snapshotOf(await readAll($), rt.sid)
+    const at = await $.clock.now()
+    if (!feedGapPassed(current.cards, at)) return false
+    const recent = recentFeed(current.cards).filter(row => row.sid !== rt.sid)
+    const added = candidates.filter(candidate => !recent.some(row => overlapsFeed(candidate.text, row.text))).slice(0, 1)
+    let published = false
+    await mutateCard($, async c => {
+      const publishedAt = await $.clock.now()
+      if (!await valid()) return c
+      published = true
+      return { ...c, summary, summaryAt: publishedAt, paused: undefined, feed: [...c.feed, ...added.map(item => ({ ...item, at: publishedAt }))].slice(-MAX_FEED) }
+    })
+    return published
+  })
+  // A competing publication delays this session, without consuming its baseline.
+  if (!claimed) {
+    rt.summaryDue = true
+    // Contention (including a crashed claim) must not cause a model call every poll.
+    await mutateCard($, c => ({ ...c, summaryAt: now }))
+  }
   await poll($)
 }
 
