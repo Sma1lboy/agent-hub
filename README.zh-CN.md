@@ -115,7 +115,7 @@ claude plugin test .
 bun evals/run.ts all
 ```
 
-单测覆盖派任务、跨 session 回答、拒收密钥、回答送达、离开的 session、进展和 5 分钟间隔、模型回退、暂停提示、OK 和全部已读、屏蔽、设置同步、自动打开、reload 后的注册、system prompt 那段、compact 后的提醒、跳转、分隔线、待办折叠和清理，终端和桌面两种界面都测。eval 用真实模型跑，结果追加到 `evals/results.jsonl`，并和上一轮对比标出 `fixed` 或 `REGRESSED`：总结 10 个用例（Haiku，约 $0.02 一轮），派任务行为 5 个用例（Opus，每个用例一个临时 git 沙盒，约 $1.6 一轮）。eval 通过 `--plugin-dir` 加载 mod，用的是单独的 store，测试任务不会出现在你真实的面板里。
+单测覆盖派任务、跨 session 回答、拒收密钥、回答送达、离开的 session、进展和 5 分钟间隔、模型回退、暂停提示、OK 和全部已读、屏蔽、设置同步、自动打开、reload 后的注册、system prompt 那段、compact 后的提醒、跳转、分隔线、待办折叠和清理，终端和桌面两种界面都测。eval 用真实模型跑，结果追加到 `evals/results.jsonl`，并和上一轮对比标出 `fixed` 或 `REGRESSED`：总结 12 个用例（Haiku，约 $0.02 一轮），派任务行为 5 个用例（Opus，每个用例一个临时 git 沙盒，约 $1.6 一轮）。eval 通过 `--plugin-dir` 加载 mod，用的是单独的 store，测试任务不会出现在你真实的面板里。
 
 ## 许可
 

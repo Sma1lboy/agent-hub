@@ -122,7 +122,7 @@ bun evals/run.ts all
 
 Runs real models and appends to `evals/results.jsonl`, marking each case `fixed` or `REGRESSED` against its last run:
 
-- **summary**: 10 cases on Haiku (outcomes only, commits and fix-ups folded into one short line with no hashes or commands, consequential unasked work caught, routine commits and approved-just-now not counted, old lines kept verbatim, mutes respected, Chinese sessions get Chinese lines). About $0.01 a run.
+- **summary**: 12 cases on Haiku (outcomes only, commits and fix-ups folded into one short line, small follow-ups after a goal adding nothing with no hashes or commands, consequential unasked work caught, routine commits and approved-just-now not counted, old lines kept verbatim, mutes respected, Chinese sessions get Chinese lines). About $0.01 a run.
 - **assign**: 5 cases on Opus, each in a fresh git sandbox (missing secret → do-task, plain edit → nothing, your decision → choose-task, standing permission → no task and the reply names it, sign-off → task). About $1.6 a run.
 
 Evals load the mod with `--plugin-dir`, which gets its own store, so test tasks never show up in your real panel.

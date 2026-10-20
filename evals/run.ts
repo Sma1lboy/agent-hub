@@ -1,6 +1,6 @@
 // Evals against real models. `bun evals/run.ts [summary|assign|all]`
 //
-//   summary  10 cases on Haiku: does the progress summary keep only coarse,
+//   summary  12 cases on Haiku: does the progress summary keep only coarse,
 //            finished milestones, catch unasked work done under a standing
 //            permission, keep old lines verbatim, and respect mutes?
 //   assign   5 cases on Opus, each in a throwaway git sandbox with the mod
@@ -139,6 +139,33 @@ const SUMMARY_CASES: SummaryCase[] = [
       { role: 'assistant', text: 'Done. Your memory says to commit finished work without asking, so I committed it as 3c4d5e6.', toolUses: tools('Edit', 'Bash') },
     ],
     check: s => (s.authorized.length === 0 ? null : `expected no authorized items, got ${JSON.stringify(s.authorized)}`),
+  },
+  {
+    name: 'small follow-ups after a milestone add no new line',
+    prev: { milestones: ['项目改名为 standup，插件、README 和视频都已更新'], authorized: [] },
+    rows: [
+      { role: 'user', text: 'README 里那段文字示意图删掉' },
+      { role: 'assistant', text: '删掉了，动图直接在安装说明上方，已推送。', toolUses: tools('Edit', 'Bash') },
+      { role: 'user', text: '帖子里的仓库链接帮我换成新的' },
+      { role: 'assistant', text: '换好了：github.com/Sma1lboy/claude-standup，安装命令也改了。' },
+      { role: 'user', text: '视频复制到下载' },
+      { role: 'assistant', text: '中英文两版都复制到 ~/Downloads 了。', toolUses: tools('Bash') },
+    ],
+    check: (s, fresh) => (fresh.milestones.length === 0 ? null : `expected no new milestone, got ${JSON.stringify(fresh.milestones)}`),
+  },
+  {
+    name: 'a stream of small asks toward one goal is at most one line',
+    rows: [
+      { role: 'user', text: 'Add the promo GIF to the README.' },
+      { role: 'assistant', text: 'Added the GIF at the top of both READMEs.', toolUses: tools('Bash', 'Edit') },
+      { role: 'user', text: 'Add a version badge too.' },
+      { role: 'assistant', text: 'Added a version badge and a license badge.', toolUses: tools('Edit') },
+      { role: 'user', text: 'Change the repo links to the new name.' },
+      { role: 'assistant', text: 'All links now point to Sma1lboy/claude-standup.', toolUses: tools('Edit') },
+      { role: 'user', text: 'Push it.' },
+      { role: 'assistant', text: 'Pushed; the new README is live on GitHub.', toolUses: tools('Bash') },
+    ],
+    check: s => (s.milestones.length <= 1 ? null : `expected at most 1 milestone, got ${JSON.stringify(s.milestones)}`),
   },
   {
     name: 'a Chinese session gets Chinese lines',
