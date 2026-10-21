@@ -72,15 +72,26 @@ export function openTasks(snap: Snapshot, now: number): OpenTask[] {
     .sort((a, b) => a.createdAt - b.createdAt)
 }
 
-export type FeedRow = FeedItem & { sid: string; name: string }
+export type FeedRow = FeedItem & { sid: string; name: string; project: string }
 
 /** The progress feed, newest first; kept after its session leaves. */
 export function feedRows(snap: Snapshot): FeedRow[] {
   const acked = new Set(snap.acked)
   return snap.cards
-    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card) })))
+    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card), project: card.repo || card.name })))
     .filter(item => !acked.has(item.id))
     .sort((a, b) => b.at - a.at)
+}
+
+/** Project blocks ordered by newest unread activity; rows within each stay newest first. */
+export function feedGroups(snap: Snapshot): { project: string; rows: FeedRow[] }[] {
+  const groups = new Map<string, FeedRow[]>()
+  for (const row of feedRows(snap)) {
+    const rows = groups.get(row.project) ?? []
+    rows.push(row)
+    groups.set(row.project, rows)
+  }
+  return [...groups].map(([project, rows]) => ({ project, rows }))
 }
 
 export const pausedCards = (snap: Snapshot, now: number) => snap.cards.filter(card => card.paused && isLive(card, now))
@@ -165,7 +176,7 @@ export function newItems(prev: Summary | undefined, next: Summary): Summary {
 
 /** Include read/dismissed and departed sessions too: acknowledging is not forgetting. */
 export function recentFeed(cards: readonly Card[]): FeedRow[] {
-  return cards.flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card) })))
+  return cards.flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card), project: card.repo || card.name })))
     .sort((a, b) => b.at - a.at).slice(0, MAX_FEED)
 }
 

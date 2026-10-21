@@ -5,7 +5,7 @@ import type { Engine, MountTarget } from 'claude-code/testing'
 import { shortTitle, sourceLabel } from '../hooks/source'
 import { withFeedClaim } from '../hooks/feed-claim'
 import type { Card, Task } from '../types'
-import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys, summaryPrompt, recentFeed, overlapsFeed, feedGapPassed } from '../hooks/hub'
+import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys, summaryPrompt, recentFeed, overlapsFeed, feedGapPassed, feedGroups, snapshotOf } from '../hooks/hub'
 
 // Standup end to end against the engine's own test host: one session ("self")
 // plus other sessions seeded straight into the shared store.
@@ -962,7 +962,7 @@ test('host title takes priority and legacy cards still render tasks and feed', a
   expect((store.get(cardKey('self')) as Card).title).toBe('Human title')
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(pane(surface))
-    expect(await ui.findAll({ type: 'Text', text: /^beta$/ })).toHaveLength(2)
+    expect(await ui.findAll({ type: 'Text', text: /^beta$/ })).toHaveLength(3)
     await ui.unmount()
   }
   expect(store.get(cardKey('other'))).toEqual(previous)
@@ -977,4 +977,53 @@ test('non-git sessions survive command failures and shorten titles', async ($, o
   expect(shortTitle('x'.repeat(100))).toBe('x'.repeat(79) + '…')
   expect(summaryPrompt('', undefined, [], [], 'product')).toContain('never a bare !129 or #10')
   expect(summaryPrompt('', undefined, [], [], 'product')).toContain('Session repository (context only, not proof of which repository a PR/MR belongs to): product')
+})
+
+
+test('interleaved projects render contiguous blocks on both surfaces and acknowledgments update them', async ($, on) => {
+  const card = (sid: string, repo: string | undefined, name: string, text: string, at: number) => otherCard({
+    sid, repo, name, tasks: [],
+    feed: [{ id: sid, kind: 'milestone', text, at }],
+  })
+  const entries = {
+    [cardKey('a-old')]: card('a-old', 'A', 'slug-old', 'A older', NOW - 3000),
+    [cardKey('b')]: card('b', 'B', 'slug-b', 'B middle', NOW - 2000),
+    [cardKey('a-new')]: card('a-new', 'A', 'slug-new', 'A newest', NOW - 1000),
+    // Previous-shape cards use their existing name as the project fallback.
+    [cardKey('legacy')]: card('legacy', undefined, 'Legacy', 'Legacy oldest', NOW - 4000),
+  }
+  const { store } = stub(on, { entries })
+  expect(feedGroups(snapshotOf(entries, 'self')).map(group => ({ project: group.project, ids: group.rows.map(row => row.id) }))).toEqual([
+    { project: 'A', ids: ['a-new', 'a-old'] },
+    { project: 'B', ids: ['b'] },
+    { project: 'Legacy', ids: ['legacy'] },
+  ])
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(pane(surface))
+    expect((await ui.findAll({ type: 'Text', text: /^(A|B|Legacy)$/ })).filter(row => row.props.weight === 'semibold').map(textOf)).toEqual(['A', 'B', 'Legacy'])
+    expect((await ui.findAll({ type: 'Text', text: /^(A newest|A older|B middle|Legacy oldest)$/ })).map(textOf)).toEqual(['A newest', 'A older', 'B middle', 'Legacy oldest'])
+    expect(await ui.find({ type: 'Text', text: /Summary 4/ })).toBeDefined()
+    await ui.unmount()
+  }
+  const terminal = await $.ui.mount(pane('terminal'))
+  await terminal.press({ key: 'ok-a-new' })
+  await terminal.unmount()
+  expect(store.get('ack:a-new')).toBeDefined()
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(pane(surface))
+    expect((await ui.findAll({ type: 'Text', text: /^(A|B|Legacy)$/ })).filter(row => row.props.weight === 'semibold').map(textOf)).toEqual(['B', 'A', 'Legacy'])
+    expect((await ui.findAll({ type: 'Text', text: /^(A newest|A older|B middle|Legacy oldest)$/ })).map(textOf)).toEqual(['B middle', 'A older', 'Legacy oldest'])
+    await ui.unmount()
+  }
+  const desktop = await $.ui.mount(pane('desktop'))
+  await desktop.press({ key: 'ack-all' })
+  await desktop.unmount()
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(pane(surface))
+    expect((await ui.findAll({ type: 'Text', text: /^(A|B|Legacy)$/ })).filter(row => row.props.weight === 'semibold')).toHaveLength(0)
+    expect(await ui.find({ type: 'Text', text: /Summary 0/ })).toBeDefined()
+    await ui.unmount()
+  }
+  expect(['a-new', 'a-old', 'b', 'legacy'].every(id => store.has('ack:' + id))).toBe(true)
 })

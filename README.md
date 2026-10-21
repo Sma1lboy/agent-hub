@@ -42,7 +42,7 @@ Working on the mod itself? Add your clone as a local marketplace instead (`claud
 - `/standup-settings` opens the settings: language (中文 or English, default 中文), open on session start (default on), open the panel when a task arrives (default on), draggable divider between the two halves (default off), the "No more like this" button on messages (default off). Settings apply to every session on the machine.
 - The status line shows `N tasks need you · /standup`, counted across all sessions.
 
-- Task and update rows identify `project · branch · session title`. Linked worktrees use their repository name; branches refresh every minute. Titles use the host title when available, then the first prompt (up to 80 characters), then the folder name. Older cards remain readable.
+- Task and update rows identify `project · branch · session title`. Linked worktrees use their repository name; branches refresh every minute. Titles use the host title when available, then the first prompt (up to 80 characters), then the folder name. Older cards remain readable. Updates are grouped into project blocks, ordered by their newest unread update; each block lists updates newest first.
 
 ### Tasks
 

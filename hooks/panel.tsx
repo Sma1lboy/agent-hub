@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { HubSettings } from '../types'
-import { DEFAULT_SETTINGS, ago, feedRows, openTasks, pausedCards, t } from './hub'
+import { DEFAULT_SETTINGS, ago, feedGroups, openTasks, pausedCards, t } from './hub'
 import { sourceLabel } from './source'
 import type { CopyKey, FeedRow, OpenTask } from './hub'
 
@@ -71,7 +71,8 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   const wide = inner >= 56
 
   const tasks = snap ? openTasks(snap, now) : []
-  const feed = snap ? feedRows(snap) : []
+  const groups = snap ? feedGroups(snap) : []
+  const feed = groups.flatMap(group => group.rows)
   const paused = snap ? pausedCards(snap, now) : []
   const selfHost = snap?.cards.find(c => c.sid === snap.self)?.hostId
   const header = (label: string, count: number, accent: boolean) => (
@@ -129,7 +130,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
     )
   }
 
-  // One row per message, newest first, each naming the project it came from. No Open: a message
+  // One row per message, newest first within its project, each naming the project it came from. No Open: a message
   // asks nothing of its session. Actions sit at the bottom trailing edge, where a task's do.
   // The terminal boxes each one; the desktop lists them bare, as its own session list does.
   const feedCard = (row: FeedRow) => (
@@ -203,7 +204,12 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
           </Text>
         ))}
         <Box flexDirection="column" rowGap={native ? 'md' : 'sm'}>
-          {feed.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : feed.map(feedCard)}
+          {feed.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : groups.map(group => (
+            <Box key={`project-${group.project}`} flexDirection="column" rowGap={native ? 'md' : 'sm'}>
+              <Text key={`project-heading-${group.project}`} weight="semibold">{group.project}</Text>
+              {group.rows.map(feedCard)}
+            </Box>
+          ))}
         </Box>
       </Box>
     </Box>
