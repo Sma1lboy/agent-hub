@@ -131,20 +131,16 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
   }
 
   // One row per message, newest first within its project, each naming the project it came from. No Open: a message
-  // asks nothing of its session. Actions sit at the bottom trailing edge, where a task's do.
+  // asks nothing of its session. Actions share the headline; metadata stays on one line.
   // The terminal boxes each one; the desktop lists them bare, as its own session list does.
   const feedCard = (row: FeedRow) => (
     <Box key={`feed-${row.id}`} flexDirection="row" alignItems="flex-start" {...(native ? { paddingX: 'xs' as const } : { borderStyle: 'round', ...cardBorder, hover: { borderColor: 'claude' }, paddingX: 'sm' as const, paddingY: 'sm' as const })}>
       <Text color="success">✓ </Text>
       <Box flexDirection="column" flexShrink={1} flexGrow={1} rowGap="xs">
-        <Text>{row.text}</Text>
-        <Box flexDirection="row" justifyContent="space-between" flexWrap="wrap" columnGap="md">
-          <Text size="footnote">
-            <Text weight="medium">{row.name}</Text>
-            <Text dimColor> · {ago(lang, row.at, now, true)}</Text>
-          </Text>
+        <Box key={`headline-${row.id}`} flexDirection="row" justifyContent="space-between" columnGap="md">
+          <Box flexShrink={1} flexGrow={1}><Text>{row.text}</Text></Box>
           {/* Always drawn, dim at rest: no surface animates a reveal, and a row's actions popping in reads as a glitch. */}
-          <Box flexDirection="row" gap="md">
+          <Box flexDirection="row" flexShrink={0} gap="md">
             {/* Each in a keyed Box of its own: a hover lights its nearest keyed Box, which would otherwise be the whole row. */}
             <Box key={`okhit-${row.id}`}>
               <Button key={`ok-${row.id}`} plain dimColor hover={{ dimColor: false }} label={tx('ok')} onPress={() => act.ack(row)} />
@@ -156,6 +152,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
             ) : null}
           </Box>
         </Box>
+        <Text key={`meta-${row.id}`} size="footnote" dimColor wrap="truncate-end">{row.name} · {ago(lang, row.at, now, true)}</Text>
       </Box>
     </Box>
   )
@@ -206,7 +203,6 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
         <Box flexDirection="column" rowGap={native ? 'md' : 'sm'}>
           {feed.length === 0 ? <Text dimColor>{tx('noUpdates')}</Text> : groups.map(group => (
             <Box key={`project-${group.project}`} flexDirection="column" rowGap={native ? 'md' : 'sm'}>
-              <Text key={`project-heading-${group.project}`} weight="semibold">{group.project}</Text>
               {group.rows.map(feedCard)}
             </Box>
           ))}

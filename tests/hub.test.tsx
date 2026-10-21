@@ -2,10 +2,10 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine, MountTarget } from 'claude-code/testing'
 
-import { shortTitle, sourceLabel } from '../hooks/source'
+import { shortTitle, sourceLabel, turnRepo } from '../hooks/source'
 import { withFeedClaim } from '../hooks/feed-claim'
 import type { Card, Task } from '../types'
-import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys, summaryPrompt, recentFeed, overlapsFeed, feedGapPassed, feedGroups, snapshotOf } from '../hooks/hub'
+import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys, summaryPrompt, recentFeed, overlapsFeed, feedGapPassed, feedGroups, snapshotOf, parseSummary } from '../hooks/hub'
 
 // Standup end to end against the engine's own test host: one session ("self")
 // plus other sessions seeded straight into the shared store.
@@ -31,8 +31,8 @@ type Opts = {
   host?: string
   cwd?: string
   repo?: { root: string; remote: string | null; internal: boolean; name: string | null } | null
-  messages?: { role: 'user' | 'assistant'; text: string; toolUses: [] }[]
-  git?: () => { exitCode: number; stdout: string }
+  messages?: import('claude-code').SessionMessage[]
+  git?: (argv: readonly string[], cwd?: string) => { exitCode: number; stdout: string }
   model?: (model: string, prompt: string) => { isAnswered: true; text: string } | { isAnswered: false; reason: 'api-error'; status: number; error: string }
   // What a prompt.submit returns; the default lets every prompt in.
   submit?: (text: string) => { text: string } | { drop: string } | Promise<{ text: string } | { drop: string }>
@@ -87,7 +87,7 @@ function stub(on: On, opts: Opts = {}) {
     return (await opts.submit?.(e.text)) ?? { text: e.text }
   })
   on('process.run', ($, e) => {
-    if (e.argv[0] === 'git') return { value: { ...(opts.git?.() ?? { exitCode: 128, stdout: '' }), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    if (e.argv[0] === 'git') return { value: { ...(opts.git?.(e.argv, e.init?.cwd) ?? { exitCode: 128, stdout: '' }), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     calls.run.push([...e.argv])
     return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -423,7 +423,7 @@ test('a turn with tools brings a summary; only new milestones become messages', 
   expect(await ui.find({ type: 'Text', text: 'Login page works end to end' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Merged MR !42/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Summary 1/ })).toBeDefined()
-  expect(await ui.findAll({ type: 'Text', text: /^alpha · ship the login page$/ })).toHaveLength(1)
+  expect(await ui.findAll({ type: 'Text', text: /^alpha · ship the login page ·/ })).toHaveLength(1)
 
   // Another turn within thirty minutes waits; after that, only the new line is added.
   await $.tool.call({ tool: 'Read', tool_use_id: 'r2', file_path: '/work/alpha/b.ts' } as never).catch(() => undefined)
@@ -922,7 +922,7 @@ test('worktree rows identify repo, branch and prompt on both surfaces; heartbeat
   await clock.advance(3_000)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(pane(surface))
-    expect(await ui.findAll({ type: 'Text', text: /^product · feature\/login · ship the login page$/ })).toHaveLength(2)
+    expect(await ui.findAll({ type: 'Text', text: /^product · feature\/login · ship the login page/ })).toHaveLength(3)
     await ui.unmount()
   }
   branch = 'fix/login'
@@ -962,7 +962,7 @@ test('host title takes priority and legacy cards still render tasks and feed', a
   expect((store.get(cardKey('self')) as Card).title).toBe('Human title')
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(pane(surface))
-    expect(await ui.findAll({ type: 'Text', text: /^beta$/ })).toHaveLength(3)
+    expect(await ui.findAll({ type: 'Text', text: /^beta(?: ·|$)/ })).toHaveLength(3)
     await ui.unmount()
   }
   expect(store.get(cardKey('other'))).toEqual(previous)
@@ -1001,7 +1001,7 @@ test('interleaved projects render contiguous blocks on both surfaces and acknowl
   await start($)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(pane(surface))
-    expect((await ui.findAll({ type: 'Text', text: /^(A|B|Legacy)$/ })).filter(row => row.props.weight === 'semibold').map(textOf)).toEqual(['A', 'B', 'Legacy'])
+    expect((await ui.findAll({ type: 'Text', text: /^(A|B|Legacy)$/ })).filter(row => row.props.weight === 'semibold').map(textOf)).toEqual([])
     expect((await ui.findAll({ type: 'Text', text: /^(A newest|A older|B middle|Legacy oldest)$/ })).map(textOf)).toEqual(['A newest', 'A older', 'B middle', 'Legacy oldest'])
     expect(await ui.find({ type: 'Text', text: /Summary 4/ })).toBeDefined()
     await ui.unmount()
@@ -1012,7 +1012,7 @@ test('interleaved projects render contiguous blocks on both surfaces and acknowl
   expect(store.get('ack:a-new')).toBeDefined()
   for (const surface of SURFACES) {
     const ui = await $.ui.mount(pane(surface))
-    expect((await ui.findAll({ type: 'Text', text: /^(A|B|Legacy)$/ })).filter(row => row.props.weight === 'semibold').map(textOf)).toEqual(['B', 'A', 'Legacy'])
+    expect((await ui.findAll({ type: 'Text', text: /^(A|B|Legacy)$/ })).filter(row => row.props.weight === 'semibold').map(textOf)).toEqual([])
     expect((await ui.findAll({ type: 'Text', text: /^(A newest|A older|B middle|Legacy oldest)$/ })).map(textOf)).toEqual(['B middle', 'A older', 'Legacy oldest'])
     await ui.unmount()
   }
@@ -1026,4 +1026,154 @@ test('interleaved projects render contiguous blocks on both surfaces and acknowl
     await ui.unmount()
   }
   expect(['a-new', 'a-old', 'b', 'legacy'].every(id => store.has('ack:' + id))).toBe(true)
+})
+
+test('injected user rows and tool results never become titles, including stored polluted titles', async ($, on) => {
+  const injected = ['<system-reminder>Worktree path: /tmp/slug</system-reminder>', '<command-name>/clear</command-name>', '<local-command-stdout>done</local-command-stdout>', 'This session is being continued from a previous conversation that ran out of context.']
+  const messages: NonNullable<Opts['messages']> = injected.map(text => ({ role: 'user', text, toolUses: [] }))
+  messages.push({ role: 'user', text: 'tool output', toolUses: [], toolResults: [{ tool_use_id: 'r', text: 'output', isError: false }] })
+  messages.push({ role: 'user', text: 'Fix the judge layout', toolUses: [] })
+  const { store } = stub(on, { messages, entries: { [cardKey('self')]: otherCard({ sid: 'self', title: injected[0] }) } })
+  on('classic.UserPromptSubmit', () => ({}))
+  await start($)
+  expect((store.get(cardKey('self')) as Card).title).toBe('Fix the judge layout')
+  await $.classic.UserPromptSubmit({ prompt: injected[1]!, session_title: 'Sidebar title' })
+  expect((store.get(cardKey('self')) as Card).title).toBe('Sidebar title')
+})
+
+test('worktree slug branches are hidden on new and old cards; meaningful long branches retain their tail', async ($, on) => {
+  const { store } = stub(on, { git: () => ({ exitCode: 0, stdout: 'claude/random-slug\n' }) })
+  await start($)
+  expect((store.get(cardKey('self')) as Card).branch).toBeUndefined()
+  expect(sourceLabel(otherCard({ repo: 'product', branch: 'claude/old-slug', title: 'Human title' }))).toBe('product · Human title')
+  expect(sourceLabel(otherCard({ repo: 'product', branch: 'slug', cwd: '/work/product/.claude/worktrees/slug', title: 'Human title' }))).toBe('product · Human title')
+  const branch = 'feature/' + 'long-'.repeat(10) + 'judges-polish'
+  expect(sourceLabel(otherCard({ repo: 'product', branch, title: 'Human title' }))).toBe(`product · …${branch.slice(-35)} · Human title`)
+})
+
+test('summaries persist the most-edited repository per turn and fold that runs merge into its milestone', async ($, on) => {
+  const use = (file_path: string) => ({ tool_use_id: file_path, tool: 'Edit', input: { file_path } })
+  const messages: NonNullable<Opts['messages']> = [
+    { role: 'user', text: 'Old work', toolUses: [] },
+    { role: 'assistant', text: '', toolUses: Array.from({ length: 5 }, () => use('/workspace/old/a.ts')) },
+    { role: 'user', text: 'Fix stitching', toolUses: [] },
+    { role: 'assistant', text: '', toolUses: [use('auto-director/a.ts'), use('video-bench/a.ts'), use('video-bench/b.ts')] },
+    { role: 'user', text: 'result', toolUses: [], toolResults: [{ tool_use_id: 'edit', text: '', isError: false }] },
+  ]
+  let summary = { milestones: ['Stitching works'], authorized: ['Merged video-bench !140 (memory: may merge)'] }
+  const { clock, store } = stub(on, {
+    cwd: '/workspace', messages,
+    entries: { [cardKey('self')]: otherCard({ sid: 'self', tasks: [], summary: { milestones: [], authorized: [] } }) },
+    git: (argv, cwd) => ({ exitCode: argv.includes('--show-toplevel') ? 0 : 128, stdout: cwd?.includes('video-bench') ? '/repos/video-bench\n' : '/repos/auto-director\n' }),
+    model: () => ({ isAnswered: true, text: JSON.stringify({ ...summary, merged: [{ milestone: 'Stitching works', authorized: summary.authorized[0] }] }) }),
+  })
+  await start($)
+  const run = async () => {
+    await $.tool.call({ tool: 'Read', tool_use_id: 'r', file_path: '/x' } as never).catch(() => undefined)
+    await $.turn.complete({ reason: 'answer', answer: 'done', durationMs: 10, isAborted: false, turnId: 'turn' })
+    await clock.advance(SUMMARY_GAP_MS + 3_000)
+    await clock.settle()
+  }
+  await run()
+  let card = store.get(cardKey('self')) as Card
+  expect(card.feed).toHaveLength(1)
+  expect(card.feed[0]?.repo).toBe('video-bench')
+  expect(card.feed[0]?.text).toBe('Stitching works (merged on standing permission)')
+  expect(card.summary).toEqual(summary)
+  expect(feedGroups(snapshotOf(Object.fromEntries(store), 'self'))[0]?.project).toBe('video-bench')
+  messages.push({ role: 'user', text: 'Now fix discovery', toolUses: [] }, { role: 'assistant', text: '', toolUses: [use('auto-director/a.ts')] })
+  summary = { milestones: ['Stitching works', 'Discovery works'], authorized: summary.authorized }
+  await run()
+  card = store.get(cardKey('self')) as Card
+  expect(card.feed.map(row => row.repo)).toEqual(['video-bench', 'auto-director'])
+  expect(card.feed[1]?.text).toBe('Discovery works')
+  expect(recentFeed([card]).map(row => row.project)).toEqual(['auto-director', 'video-bench'])
+})
+
+test('unresolved touched paths fall back to legacy card metadata', async () => {
+  let attempts = 0
+  const host = { process: { run: async () => { attempts++; throw new Error('not a repository') } } }
+  expect(await turnRepo(host as never, '/workspace', [{ role: 'assistant', text: '', toolUses: [{ tool_use_id: 'e', tool: 'Edit', input: { file_path: 'missing/file.ts' } }] }])).toBeUndefined()
+  expect(attempts).toBe(2)
+  const card = otherCard({ repo: 'fallback', feed: [{ id: 'old', kind: 'milestone', text: 'Legacy outcome', at: NOW }] })
+  expect(feedGroups(snapshotOf({ [cardKey('other')]: card }, 'self'))[0]?.project).toBe('fallback')
+})
+
+test('feed metadata uses one ellipsised line and OK shares the headline on both surfaces', async ($, on) => {
+  stub(on, { entries: { [cardKey('other')]: otherCard({ tasks: [], repo: 'video-bench', title: 'A very long title '.repeat(12), feed: [{ id: 'compact', kind: 'milestone', text: 'Stitching works', at: NOW }] }) } })
+  await start($)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(pane(surface))
+    const meta = await ui.find({ type: 'Text', text: /^video-bench ·/ })
+    expect(meta).toBeDefined()
+    expect(meta?.props.wrap).toBe('truncate-end')
+    expect(await ui.find({ key: 'project-heading-video-bench' })).toBeUndefined()
+    const headline = await ui.find({ key: 'headline-compact' })
+    expect(headline?.props.flexDirection).toBe('row')
+    const tree = await ui.drawn()
+    const find = (node: any): any => node?.props?.key === 'headline-compact' ? node : node?.children?.map(find).find(Boolean)
+    expect(JSON.stringify(find(tree))).toContain('ok-compact')
+    await ui.unmount()
+  }
+})
+
+test('folded permission suffix does not bypass cross-session duplicate detection', async ($, on) => {
+  const { clock, store } = stub(on, {
+    entries: {
+      [cardKey('self')]: otherCard({ sid: 'self', tasks: [], summary: { milestones: [], authorized: [] } }),
+      [cardKey('other')]: otherCard({ tasks: [], feed: [{ id: 'old', kind: 'milestone', text: 'Login works', at: NOW - SUMMARY_GAP_MS - 1 }] }),
+    },
+    model: () => ({ isAnswered: true, text: '{"milestones":["Login works"],"authorized":["Merged product #42 (standing permission)"],"merged":[{"milestone":"Login works","authorized":"Merged product #42 (standing permission)"}]}' }),
+  })
+  await start($)
+  await toolTurn($)
+  await clock.advance(3_000)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).feed).toEqual([])
+})
+
+test('an unrelated merge in the same run never marks the milestone as merged', async ($, on) => {
+  const milestone = 'Login prototype works locally; not merged'
+  const authorized = 'Merged unrelated documentation PR #99 (standing permission)'
+  const { clock, store } = stub(on, {
+    entries: { [cardKey('self')]: otherCard({ sid: 'self', tasks: [], summary: { milestones: [], authorized: [] } }) },
+    model: () => ({ isAnswered: true, text: JSON.stringify({ milestones: [milestone], authorized: [authorized] }) }),
+  })
+  await start($)
+  await toolTurn($)
+  await clock.advance(3_000)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).feed.map(row => row.text)).toEqual([milestone])
+})
+
+test('unassociated authorized action remains a candidate when the milestone is already reported', async ($, on) => {
+  const milestone = 'Login prototype works locally; not merged'
+  const authorized = 'Merged unrelated documentation PR #99 (standing permission)'
+  const { clock, store } = stub(on, {
+    entries: {
+      [cardKey('self')]: otherCard({ sid: 'self', tasks: [], summary: { milestones: [], authorized: [] } }),
+      [cardKey('other')]: otherCard({ tasks: [], feed: [{ id: 'reported', kind: 'milestone', text: milestone, at: NOW - SUMMARY_GAP_MS - 1 }] }),
+    },
+    model: () => ({ isAnswered: true, text: JSON.stringify({ milestones: [milestone], authorized: [authorized], merged: [] }) }),
+  })
+  await start($)
+  await toolTurn($)
+  await clock.advance(3_000)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).feed.map(({ kind, text }) => ({ kind, text }))).toEqual([{ kind: 'authorized', text: authorized }])
+})
+
+test('merge associations require valid exact endpoints and old summary responses still parse', () => {
+  const summary = { milestones: ['Stitching works'], authorized: ['Merged video-bench !140 (standing permission)'] }
+  const pair = { milestone: summary.milestones[0], authorized: summary.authorized[0] }
+  expect(parseSummary(JSON.stringify(summary))).toEqual(summary)
+  expect(parseSummary(JSON.stringify({ ...summary, merged: [pair] }))).toEqual({ ...summary, merged: [pair] })
+  for (const merged of [null, 'bad', {}, [null, 42, 'bad', {}],
+    [{ ...pair, milestone: 'Different work' }], [{ ...pair, authorized: 'Merged another PR' }],
+    [{ ...pair, milestone: 42 }], [{ ...pair, authorized: null }]]) {
+    expect(parseSummary(JSON.stringify({ ...summary, merged }))).toEqual(summary)
+  }
+  const deploy = { milestones: ['Stitching works'], authorized: ['Deployed video-bench'] }
+  expect(parseSummary(JSON.stringify({ ...deploy, merged: [{ milestone: deploy.milestones[0], authorized: deploy.authorized[0] }] }))).toEqual(deploy)
+  expect(summaryPrompt('', undefined, [])).toContain('Same session, repository, or summary run is NOT evidence')
 })

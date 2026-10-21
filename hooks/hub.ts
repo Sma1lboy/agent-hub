@@ -78,7 +78,7 @@ export type FeedRow = FeedItem & { sid: string; name: string; project: string }
 export function feedRows(snap: Snapshot): FeedRow[] {
   const acked = new Set(snap.acked)
   return snap.cards
-    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card), project: card.repo || card.name })))
+    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel({ ...card, repo: item.repo || card.repo }), project: item.repo || card.repo || card.name })))
     .filter(item => !acked.has(item.id))
     .sort((a, b) => b.at - a.at)
 }
@@ -150,12 +150,21 @@ export function readSummary(value: unknown): Summary | undefined {
   return { milestones, authorized }
 }
 
-export function parseSummary(text: string): Summary | null {
+/** Per-response evidence only: stored summary baselines keep their existing shape. */
+export type SummaryResult = Summary & { merged?: { milestone: string; authorized: string }[] }
+
+export function parseSummary(text: string): SummaryResult | null {
   const match = text.match(/\{[\s\S]*\}/)
   if (!match) return null
   try {
-    const v = JSON.parse(match[0]) as Partial<Summary>
-    return { milestones: list(v.milestones), authorized: list(v.authorized) }
+    const v = JSON.parse(match[0]) as Partial<SummaryResult>
+    const summary: Summary = { milestones: list(v.milestones), authorized: list(v.authorized) }
+    const merged = Array.isArray(v.merged) ? v.merged.filter(pair =>
+      pair && typeof pair.milestone === 'string' && typeof pair.authorized === 'string'
+      && summary.milestones.includes(pair.milestone) && summary.authorized.includes(pair.authorized)
+      && /\bmerged\b|合并/i.test(pair.authorized),
+    ).map(({ milestone, authorized }) => ({ milestone, authorized })) : []
+    return merged.length ? { ...summary, merged } : summary
   } catch {
     return null
   }
@@ -176,7 +185,7 @@ export function newItems(prev: Summary | undefined, next: Summary): Summary {
 
 /** Include read/dismissed and departed sessions too: acknowledging is not forgetting. */
 export function recentFeed(cards: readonly Card[]): FeedRow[] {
-  return cards.flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card), project: card.repo || card.name })))
+  return cards.flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel({ ...card, repo: item.repo || card.repo }), project: item.repo || card.repo || card.name })))
     .sort((a, b) => b.at - a.at).slice(0, MAX_FEED)
 }
 
@@ -204,7 +213,7 @@ export function summaryPrompt(transcript: string, prev: Summary | undefined, mut
   const muted = mutes.length ? mutes.map(m => `- ${m.text}`).join('\n') : '(none)'
   return [
     'You maintain a running progress summary of one Claude Code session for its owner, who watches many sessions at once.',
-    'Return ONLY a JSON object: {"milestones": string[], "authorized": string[]}.',
+    'Return ONLY a JSON object: {"milestones": string[], "authorized": string[], "merged": {"milestone": string, "authorized": string}[]}.',
     '',
     'The owner skims this across many sessions, so think in OUTCOMES, at the level they would tell a teammate in one breath: "login works", "the CSV export shipped", "the flaky test is fixed". Not the steps that got there.',
     '',
@@ -215,6 +224,7 @@ export function summaryPrompt(transcript: string, prev: Summary | undefined, mut
     'Write each line short (about 12 words, or 25 Chinese characters) and plain: no commit hashes, file paths, command names, flags, test counts or tool names, except a release version when it IS the outcome. Never put PR or MR numbers in milestone headlines.',
     'authorized: consequential actions the agent took WITHOUT asking because a standing permission covered them (memory, CLAUDE.md, settings, or a general yes given earlier for that kind of action): merging, releasing or tagging, deploying, publishing, deleting, sending something outside, spending money. Routine local work (editing, committing, running tests) is never worth listing here. Name the permission briefly, e.g. "merged video-bench !42 (memory: may merge)".',
     'Every PR/MR number in an authorized action must carry its repository, e.g. video-bench !129 or agent-hub #10, never a bare !129 or #10. Use the repository evidenced by the transcript; a workspace may contain several repositories. If unknown, omit the number instead of guessing.',
+    'merged: link a completed standing-permission merge to the milestone it served ONLY when the transcript explicitly establishes that relationship. Copy the exact strings from milestones and authorized into each pair. Same session, repository, or summary run is NOT evidence. Unrelated work, uncertain associations, and outcomes that are still local or not merged must have no link. Use [] when no relationship is evidenced. Do not carry links over from earlier runs.',
     `Session repository (context only, not proof of which repository a PR/MR belongs to): ${repo || '(unknown)'}`,
     'If the agent asked about that specific action and the owner said yes, it was asked: it is not authorized, list it as a milestone only if it is one.',
     '',
