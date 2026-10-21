@@ -14,6 +14,8 @@ export type FeedKind = 'milestone' | 'authorized'
 export type FeedItem = {
   id: string
   kind: FeedKind
+  /** Repository touched in this turn; older items fall back to their card. */
+  repo?: string
   text: string
   at: number
 }

@@ -78,7 +78,7 @@ export type FeedRow = FeedItem & { sid: string; name: string; project: string }
 export function feedRows(snap: Snapshot): FeedRow[] {
   const acked = new Set(snap.acked)
   return snap.cards
-    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card), project: card.repo || card.name })))
+    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel({ ...card, repo: item.repo || card.repo }), project: item.repo || card.repo || card.name })))
     .filter(item => !acked.has(item.id))
     .sort((a, b) => b.at - a.at)
 }
@@ -176,7 +176,7 @@ export function newItems(prev: Summary | undefined, next: Summary): Summary {
 
 /** Include read/dismissed and departed sessions too: acknowledging is not forgetting. */
 export function recentFeed(cards: readonly Card[]): FeedRow[] {
-  return cards.flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card), project: card.repo || card.name })))
+  return cards.flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel({ ...card, repo: item.repo || card.repo }), project: item.repo || card.repo || card.name })))
     .sort((a, b) => b.at - a.at).slice(0, MAX_FEED)
 }
 

@@ -35,7 +35,7 @@ import {
   transcriptText,
 } from './hub'
 import type { FeedRow, OpenTask } from './hub'
-import { basename, currentBranch, firstPromptTitle, projectName, shortTitle } from './source'
+import { basename, currentBranch, firstPromptTitle, projectName, shortTitle, promptTitle, turnRepo } from './source'
 import { withFeedClaim } from './feed-claim'
 import { renderHub, renderSettings } from './panel'
 import type { Actions } from './panel'
@@ -101,7 +101,7 @@ async function doJoin($: EngineInterface) {
     name: basename(cwd),
     repo: await projectName($, cwd),
     branch: await currentBranch($, cwd),
-    title: old?.title || await firstPromptTitle($),
+    title: promptTitle(old?.title ?? '') || await firstPromptTitle($),
     heartbeat: now,
     tasks: old?.tasks ?? [],
     feed: old?.feed ?? [],
@@ -146,7 +146,7 @@ async function heartbeat($: EngineInterface) {
   await mutateCard($, async card => ({
     ...card, heartbeat: now,
     branch: await currentBranch($, card.cwd),
-    title: card.title || await firstPromptTitle($),
+    title: promptTitle(card.title ?? '') || await firstPromptTitle($),
   }))
 }
 
@@ -233,6 +233,7 @@ async function deliver($: EngineInterface, ids: readonly string[]) {
 
 async function summarize($: EngineInterface, card: Card, snap: Snapshot) {
   const rows = await $.session.messages()
+  const repo = await turnRepo($, card.cwd, rows)
   const prev = readSummary(card.summary)
   const prompt = summaryPrompt(transcriptText(rows), prev, snap.mutes, recentFeed(snap.cards), card.repo)
   const ask = (model: string) => $.model.complete({ model, prompt, maxTokens: 1500, effort: 'low', timeoutMs: 90_000 })
@@ -251,15 +252,17 @@ async function summarize($: EngineInterface, card: Card, snap: Snapshot) {
     return
   }
   const fresh = newItems(prev, summary)
-  const item = (kind: FeedItem['kind'], text: string): FeedItem => ({ id: `${rt.sid}:${shortHash(kind + text + now)}`, kind, text, at: now })
-  const candidates = [...fresh.milestones.map(s => item('milestone', s)), ...fresh.authorized.map(s => item('authorized', s))]
+  const item = (kind: FeedItem['kind'], text: string): FeedItem => ({ id: `${rt.sid}:${shortHash(kind + text + now)}`, kind, text, at: now, ...(repo ? { repo } : {}) })
+  // Both new entries belong to this session's summary run; never fold stored feed rows.
+  const folded = fresh.milestones.length > 0 && fresh.authorized.some(text => /\bmerge[ds]?\b|合并/i.test(text))
+  const candidates = [...fresh.milestones.map(s => item('milestone', s + (folded ? ' (merged on standing permission)' : ''))), ...(folded ? [] : fresh.authorized.map(s => item('authorized', s)))]
   const claimed = await withFeedClaim($, rt.sid, async valid => {
     // Another session may have published while the model was answering.
     const current = snapshotOf(await readAll($), rt.sid)
     const at = await $.clock.now()
     if (!feedGapPassed(current.cards, at)) return false
     const recent = recentFeed(current.cards).filter(row => row.sid !== rt.sid)
-    const added = candidates.filter(candidate => !recent.some(row => overlapsFeed(candidate.text, row.text))).slice(0, 1)
+    const added = candidates.filter(candidate => !recent.some(row => overlapsFeed(candidate.text.replace(/ \(merged on standing permission\)$/, ''), row.text.replace(/ \(merged on standing permission\)$/, '')))).slice(0, 1)
     let published = false
     await mutateCard($, async c => {
       const publishedAt = await $.clock.now()
@@ -357,7 +360,7 @@ export const register: Register = on => {
     await join($)
     await mutateCard($, card => ({
       ...card,
-      title: shortTitle(e.session_title ?? '') || card.title || shortTitle(e.prompt) || undefined,
+      title: shortTitle(e.session_title ?? '') || promptTitle(card.title ?? '') || promptTitle(e.prompt),
     }))
     return next(e)
   }).catch(($, e, next) => next(e))
