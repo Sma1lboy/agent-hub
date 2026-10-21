@@ -1,5 +1,7 @@
 import type { Card, FeedItem, Lang, Mute, Reply, HubSettings, Snapshot, Summary, Task } from '../types'
 
+import { sourceLabel } from './source'
+
 // The pure half of Standup: store keys, the view model, the guards and the copy.
 
 export const HUB_PANE = 'standup'
@@ -65,20 +67,31 @@ export function openTasks(snap: Snapshot, now: number): OpenTask[] {
     .flatMap(card =>
       card.tasks
         .filter(task => !replied.has(`${card.sid}:${task.id}`))
-        .map(task => ({ ...task, sid: card.sid, name: card.name, hostId: card.hostId })),
+        .map(task => ({ ...task, sid: card.sid, name: sourceLabel(card), hostId: card.hostId })),
     )
     .sort((a, b) => a.createdAt - b.createdAt)
 }
 
-export type FeedRow = FeedItem & { sid: string; name: string }
+export type FeedRow = FeedItem & { sid: string; name: string; project: string }
 
 /** The progress feed, newest first; kept after its session leaves. */
 export function feedRows(snap: Snapshot): FeedRow[] {
   const acked = new Set(snap.acked)
   return snap.cards
-    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: card.name })))
+    .flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card), project: card.repo || card.name })))
     .filter(item => !acked.has(item.id))
     .sort((a, b) => b.at - a.at)
+}
+
+/** Project blocks ordered by newest unread activity; rows within each stay newest first. */
+export function feedGroups(snap: Snapshot): { project: string; rows: FeedRow[] }[] {
+  const groups = new Map<string, FeedRow[]>()
+  for (const row of feedRows(snap)) {
+    const rows = groups.get(row.project) ?? []
+    rows.push(row)
+    groups.set(row.project, rows)
+  }
+  return [...groups].map(([project, rows]) => ({ project, rows }))
 }
 
 export const pausedCards = (snap: Snapshot, now: number) => snap.cards.filter(card => card.paused && isLive(card, now))
@@ -163,7 +176,7 @@ export function newItems(prev: Summary | undefined, next: Summary): Summary {
 
 /** Include read/dismissed and departed sessions too: acknowledging is not forgetting. */
 export function recentFeed(cards: readonly Card[]): FeedRow[] {
-  return cards.flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: card.name })))
+  return cards.flatMap(card => card.feed.map(item => ({ ...item, sid: card.sid, name: sourceLabel(card), project: card.repo || card.name })))
     .sort((a, b) => b.at - a.at).slice(0, MAX_FEED)
 }
 
@@ -187,7 +200,7 @@ export function overlapsFeed(a: string, b: string): boolean {
   return shared >= 6 && shared / Math.max(left.size, right.size) >= 0.8
 }
 
-export function summaryPrompt(transcript: string, prev: Summary | undefined, mutes: readonly Mute[], recent: readonly FeedRow[] = []): string {
+export function summaryPrompt(transcript: string, prev: Summary | undefined, mutes: readonly Mute[], recent: readonly FeedRow[] = [], repo?: string): string {
   const muted = mutes.length ? mutes.map(m => `- ${m.text}`).join('\n') : '(none)'
   return [
     'You maintain a running progress summary of one Claude Code session for its owner, who watches many sessions at once.',
@@ -200,7 +213,9 @@ export function summaryPrompt(transcript: string, prev: Summary | undefined, mut
     'Never mention commits, pushes, branches or hashes anywhere: the owner does not care how work was saved, only what now works.',
     'Never a milestone: a single tool call; a commit or push; reading, exploring or explaining code; answering a question; a plan; a step of an unfinished task (tests failing, "next I will...", half-done refactors). When unsure, leave it out: an empty list is the usual answer.',
     'Write each line short (about 12 words, or 25 Chinese characters) and plain: no commit hashes, file paths, command names, flags, test counts or tool names, except a release version when it IS the outcome. Never put PR or MR numbers in milestone headlines.',
-    'authorized: consequential actions the agent took WITHOUT asking because a standing permission covered them (memory, CLAUDE.md, settings, or a general yes given earlier for that kind of action): merging, releasing or tagging, deploying, publishing, deleting, sending something outside, spending money. Routine local work (editing, committing, running tests) is never worth listing here. Name the permission briefly, e.g. "merged MR !42 (memory: may merge)".',
+    'authorized: consequential actions the agent took WITHOUT asking because a standing permission covered them (memory, CLAUDE.md, settings, or a general yes given earlier for that kind of action): merging, releasing or tagging, deploying, publishing, deleting, sending something outside, spending money. Routine local work (editing, committing, running tests) is never worth listing here. Name the permission briefly, e.g. "merged video-bench !42 (memory: may merge)".',
+    'Every PR/MR number in an authorized action must carry its repository, e.g. video-bench !129 or agent-hub #10, never a bare !129 or #10. Use the repository evidenced by the transcript; a workspace may contain several repositories. If unknown, omit the number instead of guessing.',
+    `Session repository (context only, not proof of which repository a PR/MR belongs to): ${repo || '(unknown)'}`,
     'If the agent asked about that specific action and the owner said yes, it was asked: it is not authorized, list it as a milestone only if it is one.',
     '',
     'Keep every item from the previous summary that is still true, copied WORD FOR WORD, then add new ones; if a new outcome is a later stage of an old line, add the new line rather than rewording the old one. In the language the session is in. At most 8 per list.',
