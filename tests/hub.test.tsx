@@ -5,7 +5,7 @@ import type { Engine, MountTarget } from 'claude-code/testing'
 import { shortTitle, sourceLabel, turnRepo } from '../hooks/source'
 import { withFeedClaim } from '../hooks/feed-claim'
 import type { Card, Task } from '../types'
-import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys, summaryPrompt, recentFeed, overlapsFeed, feedGapPassed, feedGroups, snapshotOf } from '../hooks/hub'
+import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys, summaryPrompt, recentFeed, overlapsFeed, feedGapPassed, feedGroups, snapshotOf, parseSummary } from '../hooks/hub'
 
 // Standup end to end against the engine's own test host: one session ("self")
 // plus other sessions seeded straight into the shared store.
@@ -1065,7 +1065,7 @@ test('summaries persist the most-edited repository per turn and fold that runs m
     cwd: '/workspace', messages,
     entries: { [cardKey('self')]: otherCard({ sid: 'self', tasks: [], summary: { milestones: [], authorized: [] } }) },
     git: (argv, cwd) => ({ exitCode: argv.includes('--show-toplevel') ? 0 : 128, stdout: cwd?.includes('video-bench') ? '/repos/video-bench\n' : '/repos/auto-director\n' }),
-    model: () => ({ isAnswered: true, text: JSON.stringify(summary) }),
+    model: () => ({ isAnswered: true, text: JSON.stringify({ ...summary, merged: [{ milestone: 'Stitching works', authorized: summary.authorized[0] }] }) }),
   })
   await start($)
   const run = async () => {
@@ -1123,11 +1123,57 @@ test('folded permission suffix does not bypass cross-session duplicate detection
       [cardKey('self')]: otherCard({ sid: 'self', tasks: [], summary: { milestones: [], authorized: [] } }),
       [cardKey('other')]: otherCard({ tasks: [], feed: [{ id: 'old', kind: 'milestone', text: 'Login works', at: NOW - SUMMARY_GAP_MS - 1 }] }),
     },
-    model: () => ({ isAnswered: true, text: '{"milestones":["Login works"],"authorized":["Merged product #42 (standing permission)"]}' }),
+    model: () => ({ isAnswered: true, text: '{"milestones":["Login works"],"authorized":["Merged product #42 (standing permission)"],"merged":[{"milestone":"Login works","authorized":"Merged product #42 (standing permission)"}]}' }),
   })
   await start($)
   await toolTurn($)
   await clock.advance(3_000)
   await clock.settle()
   expect((store.get(cardKey('self')) as Card).feed).toEqual([])
+})
+
+test('an unrelated merge in the same run never marks the milestone as merged', async ($, on) => {
+  const milestone = 'Login prototype works locally; not merged'
+  const authorized = 'Merged unrelated documentation PR #99 (standing permission)'
+  const { clock, store } = stub(on, {
+    entries: { [cardKey('self')]: otherCard({ sid: 'self', tasks: [], summary: { milestones: [], authorized: [] } }) },
+    model: () => ({ isAnswered: true, text: JSON.stringify({ milestones: [milestone], authorized: [authorized] }) }),
+  })
+  await start($)
+  await toolTurn($)
+  await clock.advance(3_000)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).feed.map(row => row.text)).toEqual([milestone])
+})
+
+test('unassociated authorized action remains a candidate when the milestone is already reported', async ($, on) => {
+  const milestone = 'Login prototype works locally; not merged'
+  const authorized = 'Merged unrelated documentation PR #99 (standing permission)'
+  const { clock, store } = stub(on, {
+    entries: {
+      [cardKey('self')]: otherCard({ sid: 'self', tasks: [], summary: { milestones: [], authorized: [] } }),
+      [cardKey('other')]: otherCard({ tasks: [], feed: [{ id: 'reported', kind: 'milestone', text: milestone, at: NOW - SUMMARY_GAP_MS - 1 }] }),
+    },
+    model: () => ({ isAnswered: true, text: JSON.stringify({ milestones: [milestone], authorized: [authorized], merged: [] }) }),
+  })
+  await start($)
+  await toolTurn($)
+  await clock.advance(3_000)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).feed.map(({ kind, text }) => ({ kind, text }))).toEqual([{ kind: 'authorized', text: authorized }])
+})
+
+test('merge associations require valid exact endpoints and old summary responses still parse', () => {
+  const summary = { milestones: ['Stitching works'], authorized: ['Merged video-bench !140 (standing permission)'] }
+  const pair = { milestone: summary.milestones[0], authorized: summary.authorized[0] }
+  expect(parseSummary(JSON.stringify(summary))).toEqual(summary)
+  expect(parseSummary(JSON.stringify({ ...summary, merged: [pair] }))).toEqual({ ...summary, merged: [pair] })
+  for (const merged of [null, 'bad', {}, [null, 42, 'bad', {}],
+    [{ ...pair, milestone: 'Different work' }], [{ ...pair, authorized: 'Merged another PR' }],
+    [{ ...pair, milestone: 42 }], [{ ...pair, authorized: null }]]) {
+    expect(parseSummary(JSON.stringify({ ...summary, merged }))).toEqual(summary)
+  }
+  const deploy = { milestones: ['Stitching works'], authorized: ['Deployed video-bench'] }
+  expect(parseSummary(JSON.stringify({ ...deploy, merged: [{ milestone: deploy.milestones[0], authorized: deploy.authorized[0] }] }))).toEqual(deploy)
+  expect(summaryPrompt('', undefined, [])).toContain('Same session, repository, or summary run is NOT evidence')
 })

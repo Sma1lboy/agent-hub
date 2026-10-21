@@ -246,15 +246,16 @@ async function summarize($: EngineInterface, card: Card, snap: Snapshot) {
     await mutateCard($, c => ({ ...c, paused: why, summaryAt: now }))
     return
   }
-  const summary = parseSummary(reply.text)
-  if (!summary) {
+  const result = parseSummary(reply.text)
+  if (!result) {
     await mutateCard($, c => ({ ...c, paused: 'the summary came back unreadable', summaryAt: now }))
     return
   }
+  const summary: Summary = { milestones: result.milestones, authorized: result.authorized }
   const fresh = newItems(prev, summary)
   const item = (kind: FeedItem['kind'], text: string): FeedItem => ({ id: `${rt.sid}:${shortHash(kind + text + now)}`, kind, text, at: now, ...(repo ? { repo } : {}) })
-  // Both new entries belong to this session's summary run; never fold stored feed rows.
-  const folded = fresh.milestones.length > 0 && fresh.authorized.some(text => /\bmerge[ds]?\b|合并/i.test(text))
+  // Require an explicit association, with both endpoints new in this run.
+  const folded = result.merged?.some(pair => fresh.milestones.includes(pair.milestone) && fresh.authorized.includes(pair.authorized)) ?? false
   const candidates = [...fresh.milestones.map(s => item('milestone', s + (folded ? ' (merged on standing permission)' : ''))), ...(folded ? [] : fresh.authorized.map(s => item('authorized', s)))]
   const claimed = await withFeedClaim($, rt.sid, async valid => {
     // Another session may have published while the model was answering.
