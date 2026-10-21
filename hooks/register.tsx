@@ -35,6 +35,7 @@ import {
   transcriptText,
 } from './hub'
 import type { FeedRow, OpenTask } from './hub'
+import { basename, currentBranch, firstPromptTitle, projectName, shortTitle } from './source'
 import { withFeedClaim } from './feed-claim'
 import { renderHub, renderSettings } from './panel'
 import type { Actions } from './panel'
@@ -97,7 +98,10 @@ async function doJoin($: EngineInterface) {
     sid: rt.sid,
     hostId: rt.hostId,
     cwd,
-    name: cwd.split('/').filter(Boolean).at(-1) ?? cwd,
+    name: basename(cwd),
+    repo: await projectName($, cwd),
+    branch: await currentBranch($, cwd),
+    title: old?.title || await firstPromptTitle($),
     heartbeat: now,
     tasks: old?.tasks ?? [],
     feed: old?.feed ?? [],
@@ -139,7 +143,11 @@ function mutateCard($: EngineInterface, fn: (card: Card) => Card | Promise<Card>
 
 async function heartbeat($: EngineInterface) {
   const now = await $.clock.now()
-  await mutateCard($, card => ({ ...card, heartbeat: now }))
+  await mutateCard($, async card => ({
+    ...card, heartbeat: now,
+    branch: await currentBranch($, card.cwd),
+    title: card.title || await firstPromptTitle($),
+  }))
 }
 
 async function readAll($: EngineInterface) {
@@ -226,7 +234,7 @@ async function deliver($: EngineInterface, ids: readonly string[]) {
 async function summarize($: EngineInterface, card: Card, snap: Snapshot) {
   const rows = await $.session.messages()
   const prev = readSummary(card.summary)
-  const prompt = summaryPrompt(transcriptText(rows), prev, snap.mutes, recentFeed(snap.cards))
+  const prompt = summaryPrompt(transcriptText(rows), prev, snap.mutes, recentFeed(snap.cards), card.repo)
   const ask = (model: string) => $.model.complete({ model, prompt, maxTokens: 1500, effort: 'low', timeoutMs: 90_000 })
   let reply = await ask('haiku')
   if (!reply.isAnswered && reply.reason === 'api-error') reply = await ask(await $.session.model())
@@ -338,6 +346,22 @@ async function showHub($: EngineInterface, lang: HubSettings['lang'], toggle: bo
 }
 
 export const register: Register = on => {
+  // The classic host events expose titles; the mods session namespace has no title getter.
+  on('classic.SessionStart', async ($, e, next) => {
+    await join($)
+    if (e.session_title?.trim()) await mutateCard($, card => ({ ...card, title: shortTitle(e.session_title!) }))
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    await join($)
+    await mutateCard($, card => ({
+      ...card,
+      title: shortTitle(e.session_title ?? '') || card.title || shortTitle(e.prompt) || undefined,
+    }))
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
   on('session.start', async ($, e, next) => {
     await join($)
     return next(e)

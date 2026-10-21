@@ -2,6 +2,7 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine, MountTarget } from 'claude-code/testing'
 
+import { shortTitle, sourceLabel } from '../hooks/source'
 import { withFeedClaim } from '../hooks/feed-claim'
 import type { Card, Task } from '../types'
 import { DEFAULT_SETTINGS, readSettings, STALE_MS, SUMMARY_GAP_MS, cardKey, looksLikeSecret, newItems, readSummary, replyKey, staleKeys, summaryPrompt, recentFeed, overlapsFeed, feedGapPassed } from '../hooks/hub'
@@ -28,6 +29,10 @@ type Opts = {
   surfaces?: ('terminal' | 'desktop')[]
   entries?: Record<string, unknown>
   host?: string
+  cwd?: string
+  repo?: { root: string; remote: string | null; internal: boolean; name: string | null } | null
+  messages?: { role: 'user' | 'assistant'; text: string; toolUses: [] }[]
+  git?: () => { exitCode: number; stdout: string }
   model?: (model: string, prompt: string) => { isAnswered: true; text: string } | { isAnswered: false; reason: 'api-error'; status: number; error: string }
   // What a prompt.submit returns; the default lets every prompt in.
   submit?: (text: string) => { text: string } | { drop: string } | Promise<{ text: string } | { drop: string }>
@@ -55,9 +60,10 @@ function stub(on: On, opts: Opts = {}) {
   on('turn.complete', ($, e) => ({ text: e.answer }))
   on('session.surfaces', () => ({ value: opts.surfaces ?? ['desktop'] }))
   on('session.id', () => ({ value: 'self' }))
-  on('session.cwd', () => ({ value: '/work/alpha' }))
+  on('session.cwd', () => ({ value: opts.cwd ?? '/work/alpha' }))
+  on('session.repo', () => ({ value: opts.repo ?? null }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
-  on('session.messages', () => ({ value: [{ role: 'user', text: 'ship the login page', toolUses: [] }] }))
+  on('session.messages', () => ({ value: opts.messages ?? [{ role: 'user', text: 'ship the login page', toolUses: [] }] }))
   on('command.register', ($, e) => {
     calls.commands.push(e.name)
     return { value: { command: e.name } }
@@ -81,6 +87,7 @@ function stub(on: On, opts: Opts = {}) {
     return (await opts.submit?.(e.text)) ?? { text: e.text }
   })
   on('process.run', ($, e) => {
+    if (e.argv[0] === 'git') return { value: { ...(opts.git?.() ?? { exitCode: 128, stdout: '' }), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     calls.run.push([...e.argv])
     return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -416,7 +423,7 @@ test('a turn with tools brings a summary; only new milestones become messages', 
   expect(await ui.find({ type: 'Text', text: 'Login page works end to end' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Merged MR !42/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Summary 1/ })).toBeDefined()
-  expect(await ui.findAll({ type: 'Text', text: /^alpha$/ })).toHaveLength(1)
+  expect(await ui.findAll({ type: 'Text', text: /^alpha · ship the login page$/ })).toHaveLength(1)
 
   // Another turn within thirty minutes waits; after that, only the new line is added.
   await $.tool.call({ tool: 'Read', tool_use_id: 'r2', file_path: '/work/alpha/b.ts' } as never).catch(() => undefined)
@@ -895,4 +902,79 @@ test('an abandoned claim delays publication without calling the model every poll
   await clock.settle()
   expect(calls.models).toEqual(['haiku', 'haiku'])
   expect((store.get(cardKey('self')) as Card).feed.map(row => row.text)).toEqual(['Login works'])
+})
+
+
+test('worktree rows identify repo, branch and prompt on both surfaces; heartbeat refreshes branch', async ($, on) => {
+  let branch = 'feature/login'
+  const { clock, store } = stub(on, {
+    cwd: '/work/product/.claude/worktrees/random-slug',
+    repo: { root: '/work/product', remote: 'git@github.com:team/product.git', internal: false, name: null },
+    git: () => ({ exitCode: 0, stdout: branch + '\n' }),
+  })
+  await start($)
+  await assign($, { kind: 'do', title: 'Review login' })
+  const card = store.get(cardKey('self')) as Card
+  expect(card.repo).toBe('product')
+  expect(card.branch).toBe('feature/login')
+  expect(card.title).toBe('ship the login page')
+  store.set(cardKey('self'), { ...card, feed: [{ id: 'source-feed', kind: 'milestone', text: 'Login works', at: NOW }] })
+  await clock.advance(3_000)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(pane(surface))
+    expect(await ui.findAll({ type: 'Text', text: /^product · feature\/login · ship the login page$/ })).toHaveLength(2)
+    await ui.unmount()
+  }
+  branch = 'fix/login'
+  await clock.advance(60_000)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).branch).toBe('fix/login')
+})
+
+test('remote-less worktrees use the main root and empty sessions acquire their first prompt later', async ($, on) => {
+  const messages: NonNullable<Opts['messages']> = []
+  const { clock, store } = stub(on, {
+    cwd: '/tmp/random-slug',
+    repo: { root: '/work/product', remote: null, internal: false, name: null },
+    messages,
+    git: () => ({ exitCode: 0, stdout: 'HEAD\n' }),
+  })
+  await start($)
+  expect(sourceLabel(store.get(cardKey('self')) as Card)).toBe('product · HEAD · random-slug')
+  messages.push({ role: 'user', text: '  Build\n the dashboard  ', toolUses: [] })
+  await clock.advance(60_000)
+  await clock.settle()
+  expect((store.get(cardKey('self')) as Card).title).toBe('Build the dashboard')
+  messages.push({ role: 'user', text: 'Second prompt', toolUses: [] })
+  await clock.advance(60_000)
+  expect((store.get(cardKey('self')) as Card).title).toBe('Build the dashboard')
+})
+
+test('host title takes priority and legacy cards still render tasks and feed', async ($, on) => {
+  const previous = otherCard({ feed: [{ id: 'old-feed', kind: 'milestone', text: 'Old outcome', at: NOW }] })
+  const { store } = stub(on, { entries: { [cardKey('other')]: previous } })
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.SessionStart', () => ({}))
+  await $.classic.SessionStart({ source: 'resume', session_title: 'Resumed title' })
+  expect((store.get(cardKey('self')) as Card).title).toBe('Resumed title')
+  await start($)
+  await $.classic.UserPromptSubmit({ prompt: 'Different prompt', session_title: 'Human title' })
+  expect((store.get(cardKey('self')) as Card).title).toBe('Human title')
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount(pane(surface))
+    expect(await ui.findAll({ type: 'Text', text: /^beta$/ })).toHaveLength(2)
+    await ui.unmount()
+  }
+  expect(store.get(cardKey('other'))).toEqual(previous)
+})
+
+test('non-git sessions survive command failures and shorten titles', async ($, on) => {
+  const { store } = stub(on, { messages: [], git: () => { throw new Error('git unavailable') } })
+  await start($)
+  const card = store.get(cardKey('self')) as Card
+  expect(card.branch).toBeUndefined()
+  expect(card.repo).toBe('alpha')
+  expect(shortTitle('x'.repeat(100))).toBe('x'.repeat(79) + '…')
+  expect(summaryPrompt('', undefined, [], [], 'product')).toContain('never a bare !129 or #10')
+  expect(summaryPrompt('', undefined, [], [], 'product')).toContain('Session repository (context only, not proof of which repository a PR/MR belongs to): product')
 })

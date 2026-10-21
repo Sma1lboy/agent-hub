@@ -24,6 +24,10 @@ export type Card = {
   /** The desktop app's session id, for the jump link; absent in a plain terminal. */
   hostId?: string
   name: string
+  /** Source metadata; absent on cards written before source labels were introduced. */
+  repo?: string
+  branch?: string
+  title?: string
   cwd: string
   heartbeat: number
   tasks: Task[]

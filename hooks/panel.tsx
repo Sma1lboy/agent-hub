@@ -3,6 +3,7 @@ import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { HubSettings } from '../types'
 import { DEFAULT_SETTINGS, ago, feedRows, openTasks, pausedCards, t } from './hub'
+import { sourceLabel } from './source'
 import type { CopyKey, FeedRow, OpenTask } from './hub'
 
 const snapAtom = atom({ plugin: 'standup', key: 'snap' } as const, null)
@@ -198,7 +199,7 @@ export async function renderHub($: EngineInterface, e: PaneInput, act: Actions):
         </Box>
         {paused.map(card => (
           <Text key={`paused-${card.sid}`} color="warning">
-            {card.name}: {tx('paused', { reason: card.paused ?? '' })}
+            {sourceLabel(card)}: {tx('paused', { reason: card.paused ?? '' })}
           </Text>
         ))}
         <Box flexDirection="column" rowGap={native ? 'md' : 'sm'}>
